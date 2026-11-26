@@ -1,0 +1,17 @@
+max_supervisors: 3
+max_dynamic_agents: 6
+max_parallel_agents: 2
+max_parallel_model_calls: 1
+sequential_model_loading: true
+max_delegation_depth: 2
+max_iterations: 3
+agent_timeout_seconds: 600
+run_timeout_seconds: 3600
+max_model_calls: 32
+max_tokens: 100000
+max_output_tokens: 2048
+max_retries: 1
+max_conflict_reviews: 2
+max_active_runs: 1
+max_retained_runs: 20
+retention_seconds: 3600

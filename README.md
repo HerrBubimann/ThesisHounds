@@ -1,1 +1,173 @@
 # ThesisHounds
+
+[![CI](https://github.com/HerrBubimann/ThesisHounds/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HerrBubimann/ThesisHounds/actions/workflows/ci.yml)
+
+Lokale, datenschutzorientierte Infrastructure Foundation des DHBW-Projekts zur Begutachtung wissenschaftlicher Arbeiten. Version 0.2 erweitert FastAPI, Streamlit und einen gemeinsamen Ollama-Service um einen kontrollierten LangGraph-Workflow mit mehreren Modellen und dynamischen Subagenten.
+
+Die Implementierung führt eine **synthetische Beispielanalyse** aus. Fachliche Bewertungslogik, PDF-Parser, RAG und produktive Benutzerverwaltung sind noch nicht implementiert. Die im Betrieb angezeigten Ergebnisse stammen aus tatsächlichen lokalen Modellaufrufen. Ausschließlich Tests verwenden ausdrücklich gekennzeichnete Mock-Provider.
+
+## Architektur
+
+```mermaid
+flowchart TB
+    Browser[Lokaler Browser] -->|127.0.0.1:8501| UI[Streamlit Control Center]
+    UI -->|internes frontend_api-Netz| API[FastAPI]
+    API --> Runtime[Run Manager und LangGraph Orchestrator]
+    Runtime --> Supervisors[Content / Methodology / Formal Supervisor]
+    Supervisors --> Factory[Validierte Agent Factory]
+    Factory --> Specialists[Dynamische Subagenten]
+    Specialists --> Review[Evidenzprüfung / Cross-Model Review / Konflikte]
+    Review --> Synthesis[Syntheseentwurf und menschliche Freigabe]
+    Runtime --> Gateway[LLM Gateway mit Policy und Budgets]
+    Specialists --> Gateway
+    Review --> Gateway
+    Gateway -->|internes inference-Netz| Ollama[Ein Ollama-Service]
+    Ollama --- Models[(Persistente Modelle: Qwen / Mistral / Llama)]
+    Runtime --- Docs[(Temporäre synthetische Dokumente)]
+```
+
+Beide Laufzeitnetze sind intern. Nur das Frontend veröffentlicht einen Loopback-Port. Die Modellbereitstellung verwendet kurzzeitig eine separate internetfähige Konfiguration und stoppt vorher die Analyseanwendung.
+
+## Voraussetzungen
+
+- Python **3.12**, Git, Docker Engine/Desktop mit Linux-Containern und Compose ab v2.24. Container und CI verwenden Python 3.12.16.
+- Windows: Docker Desktop mit WSL2-Backend und aktivierter Virtualisierung. Linux: Docker Engine und Compose-Plugin. macOS: Docker Desktop, CPU-Inferenz im vorliegenden Stack.
+- Als Planungswert mindestens 16 GB verfügbarer RAM und etwa 30 GB freier Speicher für drei quantisierte Modelle, Images und Build-Caches. Der tatsächliche Bedarf ist modell- und hardwareabhängig.
+- Internet zur Installation, für Image-Builds und Modelldownloads. Spätere Laufzeit kann ohne Internet erfolgen.
+- Optional NVIDIA-GPU mit unterstütztem Treiber; unter Linux zusätzlich NVIDIA Container Toolkit. Docker auf macOS verwendet hier keine Metal-Beschleunigung.
+
+## Schnellstart: Windows / PowerShell
+
+Im Repository-Stamm ausführen. Eine vorhandene `.env` erhalten.
+
+```powershell
+Copy-Item .env.example .env
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-dev.lock
+# Baut Images und lädt alle aktivierten lokalen Modelle aus config/models.yaml:
+.\.venv\Scripts\python.exe infrastructure/scripts/provision.py
+# Offline starten:
+docker compose up -d --no-build --pull never --wait --wait-timeout 180
+.\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --chat
+.\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --analysis --mode D
+```
+
+Im bereits von Codex vorbereiteten Checkout ist `.venv` vorhanden; die Installation muss dort nicht wiederholt werden. Dashboard: **[http://localhost:8501](http://localhost:8501)**; bei IPv6-Abweichungen `http://127.0.0.1:8501` verwenden. Im Control Center eine synthetische Analyse starten, den Agentenbaum verfolgen und Befunde anschließend menschlich prüfen.
+
+## Schnellstart: Linux / macOS
+
+```bash
+cp .env.example .env
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+.venv/bin/python infrastructure/scripts/provision.py
+docker compose up -d --no-build --pull never --wait --wait-timeout 180
+.venv/bin/python infrastructure/scripts/smoke.py --analysis --mode D
+```
+
+`provision.py` benötigt PyYAML aus der Entwicklungsinstallation. Es lädt standardmäßig `qwen3:8b`, `mistral:7b` und `llama3.1:8b`. Keine vertrauliche Verarbeitung während der Bereitstellung. Nach einem normalen Fehler wird das Online-Netz im `finally`-Schritt entfernt; nach hartem Abbruch gilt die [Wiederherstellungsanleitung](docs/setup.md#unterbrochene-bereitstellung).
+
+## Konfiguration und Betriebsmodi
+
+| Datei | Aufgabe |
+| --- | --- |
+| `config/models.yaml` | Modell-IDs, Hersteller, Provider, Rollen, Fähigkeiten, Kontext und Ressourcenschätzungen |
+| `config/agents.yaml` | Modellzuordnung für Orchestrator, Synthese und drei Supervisoren; standardmäßig Content + Methodology |
+| `config/execution.yaml` | Parallelität, Laufzeiten, Delegation, Token-/Aufrufbudgets und Aufbewahrung |
+| `config/policies.yaml` | `LOCAL_ONLY`, Provider- und Werkzeug-Allowlist |
+| `.env` | Ports, HTTP-Timeouts und Container-CPU-/RAM-Limits; `LLM_MODEL` für den bestehenden Einzelchat |
+
+Compose bindet `config/` schreibgeschützt ein. Nach Konfigurationsänderungen das Backend mit `docker compose restart backend` neu starten; das beendet laufende Analysen. Nach Änderungen an `.env` ist `docker compose up -d` erforderlich. Ein Modellwechsel benötigt zusätzlich eine erneute Bereitstellung. Optionale Gemma-, DeepSeek- oder Phi-Modelle können als weitere lokale Registry-Einträge ergänzt werden; deren Schema- und Kontextkompatibilität muss separat getestet werden.
+
+Standardlimits: drei Supervisoren, sechs Subagenten, zwei aktive Agenten, **ein Modellaufruf gleichzeitig**, Delegationstiefe zwei, maximal drei Iterationen pro Subagent, 32 Modellaufrufe und 100000 konservativ reservierte Tokens pro Analyse. Das Laufzeitlimit beträgt eine Stunde. Standardmäßig wird das Modell nach jedem Aufruf entladen, um CPU-/GPU-Speicher freizugeben; dies kostet Ladezeit. Details und zulässige Konfigurationsgrenzen stehen in [Architektur](docs/architecture.md).
+
+`LOCAL_ONLY` ist der einzige aktivierbare Betriebsmodus dieser Version. `EXPERIMENTAL` ist als getrennte Policy-Grenze vorgesehen und wird hier beim Start abgewiesen. OpenAI, Anthropic, Google und vLLM sind nur über den Provider-Vertrag vorbereitete Erweiterungspunkte. Es gibt keinen externen Fallback und keine aktivierbare Cloud-Anbindung.
+
+## Evaluationsmodi
+
+| Modus | Ausführung |
+| --- | --- |
+| A | Ein LLM-Aufruf liefert Befunde mit einem einfachen Prompt. |
+| B | Statische Hierarchie mit einem gemeinsamen LLM, ohne Cross-Model Review. |
+| C | Statische Hierarchie mit verschiedenen Herstellern und Cross-Model Review. |
+| D | Dynamische AgentSpecs, verschiedene Hersteller, Cross-Model Review und deterministische Belegprüfung. |
+
+Alle Modi verwenden dieselben synthetischen Seiten und frei wählbare Bewertungskriterien. Ein gefundener Textbeleg beweist keine fachliche Richtigkeit. Modellzustimmung ist kein Wahrheitsbeweis. Details zu Messgrößen und notwendigen menschlichen Referenzbewertungen: [Evaluation](docs/evaluation.md).
+
+## GPU, Stoppen und Neustart
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up -d --no-build --pull never --wait --wait-timeout 180
+docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama ps
+# Mit dem Python-Interpreter der virtuellen Umgebung ausführen:
+python infrastructure/scripts/smoke.py --gpu --analysis --mode D
+docker compose -f compose.yaml -f compose.gpu.yaml down
+```
+
+CPU-Stack stoppen: `docker compose down`. Modelle bleiben erhalten; **`down -v` löscht das Modell-Volume**. Analyseläufe, Befunde und menschliche Entscheidungen sind absichtlich flüchtig und gehen bei Backend-Neustart verloren. Ein Modellwechsel benötigt keinen separaten Ollama-Container.
+
+## Tests und CI
+
+Dieselben Pflichtprüfungen wie in GitHub Actions laufen auch lokal. Es werden keine echten LLMs und keine GPU benötigt, alle Modellantworten sind Mocks.
+
+```bash
+make ci                 # lint, format-check, alle Tests mit Coverage, security, docker-check
+make test-unit | test-integration | test-security | test
+make lint | format-check | coverage | security | docker-check
+make docker-smoke       # benötigt Docker: Images bauen, Stack mit Mock-LLM, End-to-End-Test
+make format             # Ruff-Autofix und Formatierung
+```
+
+Ohne `make` (z. B. Windows) gelten dieselben Ziele direkt:
+
+```powershell
+.\.venv\Scripts\python.exe infrastructure/scripts/run_ci.py ci
+.\.venv\Scripts\python.exe infrastructure/scripts/run_ci.py test-unit coverage
+```
+
+Unter Linux/macOS `.venv/bin/python` verwenden. Berichte landen in `reports/` (JUnit, `coverage.xml`, `coverage/html/index.html`, Scannerberichte). Bandit und pip-audit werden beim ersten Aufruf von `security` aus `requirements-security.lock` in `.tools/scanners` installiert. Gitleaks und Trivy laufen lokal nur, wenn sie installiert sind, und werden sonst als `SKIPPED` ausgewiesen. In der CI sind sie verpflichtend.
+
+### Pull-Request-Prozess und verpflichtende Checks
+
+1. Feature-Branch von `main` anlegen, Änderungen mit Tests umsetzen, `make ci` ausführen.
+2. Pull Request auf `main` öffnen und das [Template](.github/pull_request_template.md) ausfüllen.
+3. Die [CI-Pipeline](docs/ci-cd.md) läuft automatisch: Code Quality, Unit-, Integrations- und Sicherheitstests, Coverage, Bandit, pip-audit, Gitleaks, Docker-Validierung, Image-Build mit Trivy-Scan und Runtime-Smoke-Tests.
+4. Verpflichtender Status Check ist **`thesishounds-ci-gate`**. Er ist nur grün, wenn jeder Job erfolgreich war. Fehlgeschlagene, abgebrochene oder übersprungene Jobs, fehlende Testberichte und übersprungene Tests lassen ihn fehlschlagen.
+5. Merge erst nach grünem Gate, einer Freigabe durch ein anderes Teammitglied und aufgelösten Review-Kommentaren. Der Branch muss auf dem Stand von `main` sein.
+
+> **Hinweis:** Das GitHub-Ruleset, das diese Regeln erzwingt, ist vorbereitet ([`github_ruleset.json`](infrastructure/scripts/github_ruleset.json)), aber erst wirksam, wenn ein Repository-Admin es angelegt hat. Siehe [Einrichtung](docs/ci-cd.md#github-ruleset-für-main).
+
+Verbindliche Teamregeln: [docs/contributing.md](docs/contributing.md).
+
+### Coverage-Anforderungen
+
+Die kombinierte Coverage (Zeilen + Branches) aller Testsuites muss mindestens **80 %** betragen (`fail_under` in `pyproject.toml`). Gemessen wurden am 26.11.2026 85,1 %. Der Wert wird nur erhöht, nie abgesenkt.
+
+### Fehlerbehebung bei fehlgeschlagenen Pipelines
+
+| Job rot | Vorgehen |
+| --- | --- |
+| Code Quality | `make format`, danach `make lint` |
+| Unit/Integration/Security Tests | Job Summary und Artefakt `*-test-report` ansehen, lokal `make test-unit` usw. |
+| Test Coverage | Tests ergänzen; HTML-Bericht im Artefakt `coverage-report` |
+| Security Checks | Artefakt `security-scan-report`; Abhängigkeit aktualisieren, Secret widerrufen. Ausnahmen nur nach [Verfahren](docs/ci-cd.md#ausnahmen) |
+| Docker Validation/Build | `make docker-check` bzw. `make docker-smoke`; Trivy-Berichte im Artefakt `docker-scan-report` |
+| nur Quality Gate | Gate-Summary nennt fehlende Berichte oder übersprungene Tests |
+
+Weitere Fälle: [docs/ci-cd.md#fehlerbehebung](docs/ci-cd.md#fehlerbehebung). Echte Inferenz, GPU und Offline-Abnahme erfolgen auf Zielhardware mit dem Smoke-Script. Der tatsächlich ausgeführte Prüfumfang ist in [validation.md](docs/validation.md) dokumentiert.
+
+## API und Dokumentation
+
+Die bisherigen Endpunkte `/health`, `/api/v1/status`, `/api/v1/models` und `/api/v1/chat` bleiben erhalten. Die lokale Modellliste unter `/models` behält ihren Vertrag; `/models/status` ergänzt Registry-, Hersteller- und Verfügbarkeitsinformationen.
+
+Neu: `/api/v1/agents`, `/agents/{agent_id}`, `/runs`, `/runs/{run_id}`, `/runs/{run_id}/graph`, `/runs/{run_id}/findings`, `/runs/{run_id}/cancel`, `/findings/{finding_id}/review` und `/system/resources`. Methoden und Beispiele: [Setup und API](docs/setup.md).
+
+- [Architektur, Workflow und Erweiterungspunkte](docs/architecture.md)
+- [Sicherheit und bekannte Grenzen](docs/security.md)
+- [Entwicklungsumgebung, DHBW-Server und Fehlerbehebung](docs/setup.md)
+- [Wissenschaftliche Evaluation](docs/evaluation.md)
+- [Prüfstand und offene Abnahme](docs/validation.md)
+- [CI/CD-Pipeline, Sicherheitsschwellen und Ruleset](docs/ci-cd.md)
+- [Entwicklungsregeln für das Team](docs/contributing.md)
+
+Lokale Verarbeitung macht das System **nicht automatisch DSGVO-konform**. Das aktuelle MVP besitzt keine Benutzeridentifikation und ist keine freigegebene Mehrbenutzeranwendung. Vor vertraulicher oder produktiver Nutzung sind Datenschutzbewertung, Authentifizierung, Zugriffsrechte, Verschlüsselung, Löschung und Betriebsfreigabe erforderlich.

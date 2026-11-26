@@ -1,0 +1,17 @@
+orchestrator_model: qwen
+synthesis_model: qwen
+single_model: qwen
+default_supervisors: [content, methodology]
+supervisors:
+  - id: content
+    name: Content Supervisor
+    model_id: llama
+    description: Inhalt, Forschungsfrage, Argumentation und fachliche Konsistenz.
+  - id: methodology
+    name: Methodology Supervisor
+    model_id: mistral
+    description: Methodik, Forschungsdesign, Datenauswertung und Limitationen.
+  - id: formal
+    name: Formal Supervisor
+    model_id: qwen
+    description: Struktur, wissenschaftlicher Stil, Formalia und Zitation.

@@ -1,0 +1,120 @@
+name: thesishounds
+
+x-security: &security
+  restart: "on-failure:3"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  frontend:
+    <<: *security
+    image: thesishounds/frontend:0.2.0
+    cpus: ${FRONTEND_CPUS:-1.0}
+    mem_limit: ${FRONTEND_MEMORY:-1g}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8501}:8501"
+    environment:
+      BACKEND_URL: http://backend:8000
+      FRONTEND_REQUEST_TIMEOUT: ${FRONTEND_REQUEST_TIMEOUT:-320}
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+    networks: [frontend_api]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=1770
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    <<: *security
+    image: thesishounds/backend:0.2.0
+    cpus: ${BACKEND_CPUS:-2.0}
+    mem_limit: ${BACKEND_MEMORY:-1g}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen3:8b}
+      LLM_CONNECT_TIMEOUT: ${LLM_CONNECT_TIMEOUT:-5}
+      LLM_STATUS_TIMEOUT: ${LLM_STATUS_TIMEOUT:-10}
+      LLM_CHAT_TIMEOUT: ${LLM_CHAT_TIMEOUT:-300}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_CONTEXT_LENGTH: ${LLM_CONTEXT_LENGTH:-4096}
+      CONFIG_DIR: /app/config
+      DOCUMENT_STORE_DIR: /tmp/documents
+      LANGSMITH_TRACING: "false"
+      LANGCHAIN_TRACING_V2: "false"
+      OTEL_SDK_DISABLED: "true"
+    volumes:
+      - ./config:/app/config:ro
+    expose: ["8000"]
+    networks: [frontend_api, inference]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001,mode=1770
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  ollama:
+    <<: *security
+    image: thesishounds/ollama:0.40.18
+    cpus: ${OLLAMA_CPUS:-4.0}
+    mem_limit: ${OLLAMA_MEMORY:-12g}
+    build:
+      context: .
+      dockerfile: infrastructure/ollama/Dockerfile
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_DEBUG: "false"
+      OLLAMA_NOHISTORY: "1"
+      OLLAMA_KEEP_ALIVE: 5m
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_MAX_QUEUE: "4"
+      OLLAMA_CONTEXT_LENGTH: ${LLM_CONTEXT_LENGTH:-4096}
+    expose: ["11434"]
+    networks: [inference]
+    volumes:
+      - ollama_models:/home/ollama/.ollama
+    # Executable scratch space is needed by native inference runners.
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=1g,uid=10001,gid=10001,mode=1770
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 30s
+
+networks:
+  frontend_api:
+    internal: true
+  inference:
+    internal: true
+
+volumes:
+  ollama_models:

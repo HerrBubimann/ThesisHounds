@@ -1,0 +1,37 @@
+models:
+  - id: qwen
+    name: qwen3:8b
+    manufacturer: Alibaba
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [orchestrator, content, methodology, formal, specialist, reviewer, synthesis]
+    privacy: CONFIDENTIAL
+  - id: mistral
+    name: mistral:7b
+    manufacturer: Mistral AI
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [methodology, specialist, reviewer]
+    privacy: CONFIDENTIAL
+  - id: llama
+    name: llama3.1:8b
+    manufacturer: Meta
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [content, formal, specialist, reviewer]
+    privacy: CONFIDENTIAL

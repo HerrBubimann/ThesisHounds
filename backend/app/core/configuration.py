@@ -1,0 +1,70 @@
+from pathlib import Path
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.llm.model_registry import ModelRegistry
+from app.schemas.domain import Category
+from app.security.policy_engine import PolicyConfig, PolicyEngine
+
+
+class ExecutionLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    max_supervisors: int = Field(default=3, ge=1, le=3)
+    max_dynamic_agents: int = Field(default=6, ge=1, le=32)
+    max_parallel_agents: int = Field(default=2, ge=1, le=8)
+    max_parallel_model_calls: int = Field(default=1, ge=1, le=4)
+    sequential_model_loading: bool = True
+    max_delegation_depth: int = Field(default=2, ge=1, le=2)
+    max_iterations: int = Field(default=3, ge=1, le=10)
+    agent_timeout_seconds: float = Field(default=600, gt=0, le=3600)
+    run_timeout_seconds: float = Field(default=3600, gt=0, le=14400)
+    max_model_calls: int = Field(default=32, ge=1, le=100)
+    max_tokens: int = Field(default=100000, ge=100, le=1000000)
+    max_output_tokens: int = Field(default=2048, ge=128, le=4096)
+    max_retries: int = Field(default=1, ge=0, le=2)
+    max_conflict_reviews: int = Field(default=2, ge=0, le=6)
+    max_active_runs: int = Field(default=1, ge=1, le=2)
+    max_retained_runs: int = Field(default=20, ge=1, le=100)
+    retention_seconds: float = Field(default=3600, ge=1, le=86400)
+
+
+class SupervisorDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    id: Category
+    name: str
+    model_id: str
+    description: str
+
+
+class AgentsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    orchestrator_model: str
+    synthesis_model: str
+    single_model: str
+    default_supervisors: list[Category]
+    supervisors: list[SupervisorDefinition]
+
+    @field_validator("supervisors")
+    @classmethod
+    def unique_supervisors(cls, value):
+        if len({s.id for s in value}) != len(value):
+            raise ValueError("Duplicate supervisors")
+        return value
+
+
+class RuntimeConfig:
+    def __init__(self, directory: Path):
+        def load(name):
+            return yaml.safe_load((directory / name).read_text("utf-8"))
+
+        self.models = ModelRegistry.load(directory / "models.yaml")
+        self.limits = ExecutionLimits.model_validate(load("execution.yaml"))
+        self.agents = AgentsConfig.model_validate(load("agents.yaml"))
+        self.policy = PolicyEngine(PolicyConfig.model_validate(load("policies.yaml")))
+        self.models.get(self.agents.orchestrator_model, "orchestrator")
+        self.models.get(self.agents.synthesis_model, "synthesis")
+        for supervisor in self.agents.supervisors:
+            self.models.get(supervisor.model_id, supervisor.id)
+        if not set(self.agents.default_supervisors) <= {s.id for s in self.agents.supervisors}:
+            raise ValueError("Default supervisors must be configured")

@@ -1,0 +1,60 @@
+from pydantic import ValidationError
+
+from app.agents.agent_registry import AgentRegistry
+from app.core.configuration import RuntimeConfig
+from app.llm.errors import LLMError
+from app.schemas.domain import AgentRecord, AgentSpec
+from app.security.tool_permissions import validate_tools
+
+
+class AgentFactory:
+    def __init__(self, config: RuntimeConfig, registry: AgentRegistry):
+        self.config = config
+        self.registry = registry
+
+    def create(
+        self, specification: AgentSpec | dict, parent: AgentRecord, *, dynamic: bool = True
+    ) -> tuple[AgentRecord, AgentSpec]:
+        try:
+            # Revalidate instances too: model_construct/model_copy must not bypass server checks.
+            data = (
+                specification.model_dump()
+                if isinstance(specification, AgentSpec)
+                else specification
+            )
+            spec = AgentSpec.model_validate(data)
+        except ValidationError:
+            raise LLMError(422, "Ungültige oder nicht freigegebene Agentenspezifikation.") from None
+        limits = self.config.limits
+        if self.registry.records.get(parent.agent_id) is not parent or not parent.can_delegate:
+            raise LLMError(403, "Dieser Parent darf keine Agenten delegieren.")
+        if parent.role not in {"content", "methodology", "formal"} or spec.category != parent.role:
+            raise LLMError(403, "Subagent muss zur freigegebenen Supervisor-Rolle gehören.")
+        if spec.supervisor_id != parent.agent_id:
+            raise LLMError(403, "Supervisor-Zuordnung ist nicht freigegeben.")
+        if parent.depth + 1 > min(limits.max_delegation_depth, spec.max_delegation_depth):
+            raise LLMError(429, "Maximale Delegationstiefe erreicht.")
+        if (
+            spec.max_iterations > limits.max_iterations
+            or spec.max_runtime_seconds > limits.agent_timeout_seconds
+        ):
+            raise LLMError(429, "Agentenspezifikation überschreitet das Ausführungsbudget.")
+        validate_tools(spec.allowed_tools, self.config.policy.config.allowed_tools)
+        model = self.config.models.get(spec.model_id, "specialist")
+        self.config.policy.check(model, "CONFIDENTIAL", "specialist")
+        record = self.registry.register(
+            AgentRecord(
+                agent_id=f"{parent.run_id}_{spec.agent_id}",
+                run_id=parent.run_id,
+                name=spec.name,
+                role="specialist",
+                model_id=model.id,
+                manufacturer=model.manufacturer,
+                parent_agent=parent.agent_id,
+                task=spec.task,
+                depth=parent.depth + 1,
+                dynamic=dynamic,
+                specification=spec,
+            )
+        )
+        return record, spec

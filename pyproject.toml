@@ -1,0 +1,48 @@
+[project]
+name = "thesishounds"
+version = "0.2.0"
+description = "Local AI infrastructure foundation for scientific thesis review"
+requires-python = ">=3.12,<3.13"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".tools", ".python"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend", "."]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["backend/app", "frontend", "infrastructure/scripts"]
+branch = true
+relative_files = true
+# Operational entry points that only drive Docker/subprocesses and are exercised by the CI
+# docker-build job instead of pytest. Everything else, including CI helpers, is measured.
+omit = [
+    "infrastructure/scripts/run_ci.py",
+    "infrastructure/scripts/ci_e2e.py",
+    "infrastructure/scripts/smoke.py",
+]
+
+[tool.coverage.report]
+# Ratchet: measured 85.1 % (combined line + branch) on 2026-11-26; the 70 % target is met.
+# Raise in steps; never lower it to make a failing pipeline pass (see docs/ci-cd.md).
+fail_under = 80
+show_missing = true
+skip_covered = false
+precision = 1
+
+[tool.coverage.html]
+directory = "reports/coverage/html"
+
+[tool.coverage.xml]
+output = "reports/coverage.xml"
+
+[tool.bandit]
+# Tests use assert by design; production code and scripts are scanned in full.
+exclude_dirs = ["tests", ".venv", ".tools", ".python"]

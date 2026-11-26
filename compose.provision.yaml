@@ -1,0 +1,5 @@
+# ONLY for model acquisition, never use with confidential inputs.
+# The provision script starts only Ollama, then removes this online network.
+networks:
+  inference:
+    internal: false

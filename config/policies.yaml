@@ -1,0 +1,5 @@
+mode: LOCAL_ONLY
+experimental_enabled: false
+allowed_providers: [ollama]
+allowed_tools: [document.read]
+# No external provider is implemented or enabled, including in EXPERIMENTAL.
