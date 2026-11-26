@@ -9,20 +9,35 @@ class AgentRegistry:
         self.records: dict[str, AgentRecord] = {}
 
     def register(self, record: AgentRecord) -> AgentRecord:
-        if record.agent_id in self.records:
+        return self.register_many([record])[0]
+
+    def register_many(self, records: list[AgentRecord]) -> list[AgentRecord]:
+        """Validate the complete batch before mutating this process-local registry."""
+        identifiers = [record.agent_id for record in records]
+        if len(set(identifiers)) != len(identifiers) or any(
+            identifier in self.records for identifier in identifiers
+        ):
             raise LLMError(422, "Agent-ID ist bereits vergeben.")
-        run_agents = self.for_run(record.run_id)
-        if record.role in {"content", "methodology", "formal"}:
+        for run_id in {record.run_id for record in records}:
+            proposed = [record for record in records if record.run_id == run_id]
+            run_agents = self.for_run(run_id)
             if (
-                sum(a.role in {"content", "methodology", "formal"} for a in run_agents)
-                >= self.limits.max_supervisors
+                sum(a.role in {"content", "methodology", "formal"} for a in run_agents + proposed)
+                > self.limits.max_supervisors
             ):
                 raise LLMError(429, "Supervisor-Limit erreicht.")
-        if record.role == "specialist":
-            if sum(a.role == "specialist" for a in run_agents) >= self.limits.max_dynamic_agents:
+            if sum(a.role == "specialist" for a in proposed) > self.remaining_specialists(run_id):
                 raise LLMError(429, "Subagentenlimit erreicht.")
-        self.records[record.agent_id] = record
-        return record
+        # No await between the quota checks and insertion: atomic on the runtime event loop.
+        self.records.update((record.agent_id, record) for record in records)
+        return records
+
+    def remaining_specialists(self, run_id: str) -> int:
+        return max(
+            0,
+            self.limits.max_dynamic_agents
+            - sum(agent.role == "specialist" for agent in self.for_run(run_id)),
+        )
 
     def for_run(self, run_id: str) -> list[AgentRecord]:
         return [a for a in self.records.values() if a.run_id == run_id]

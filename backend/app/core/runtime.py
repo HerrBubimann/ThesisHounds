@@ -203,40 +203,41 @@ class AnalysisRuntime:
         for run_id in self.runs:
             self.store.remove(run_id)
 
-    def human_review(self, finding_id: str, review: HumanReview) -> Finding:
-        for run_id, values in self.findings.items():
-            finding = next((f for f in values if f.finding_id == finding_id), None)
-            if finding is None:
-                continue
-            run = self.get(run_id)
-            if run.status not in {"WAITING_FOR_REVIEW", "COMPLETED"}:
-                raise LLMError(409, "Analyse ist noch nicht für die menschliche Prüfung bereit.")
-            if review.edited_statement is not None and review.edited_statement != finding.statement:
-                finding.original_statement = finding.original_statement or finding.statement
-                finding.statement = review.edited_statement
-                finding.superseded_reviews.extend(finding.reviews)
-                finding.reviews = []
-                finding.review_status = "PENDING"
-                finding.evidence_status = "NOT_CHECKED"
-                finding.evidence_detail = (
-                    "Befund wurde durch einen Menschen bearbeitet; "
-                    "vorherige Modellprüfung ist ungültig."
-                )
-            finding.human_status, finding.human_note = review.decision, review.note
-            if all(f.human_status != "PENDING" for f in values):
-                accepted = [f for f in values if f.human_status == "ACCEPTED"]
-                # The LLM synthesis is NEVER included in a final report: it is not human-approved.
-                run.final_report = "Menschlich freigegebene Befunde\n\n" + "\n\n".join(
-                    f"{f.category}: {f.statement}\nBeleg (Seite {f.page}): {f.quote}\n"
-                    f"Prüfstatus: {f.evidence_status}; Konflikt: {f.conflict}"
-                    for f in accepted
-                )
-                run.status = "COMPLETED"
-            else:
-                run.status, run.final_report = "WAITING_FOR_REVIEW", None
-            run.validated_count = sum(f.evidence_status == "VALIDATED" for f in values)
-            return finding
-        raise LLMError(404, "Befund wurde nicht gefunden.")
+    def human_review(self, run_id: str, finding_id: str, review: HumanReview) -> Finding:
+        run = self.get(run_id)
+        values = self.findings.get(run_id, [])
+        finding = next(
+            (f for f in values if f.finding_id == finding_id and f.run_id == run_id), None
+        )
+        if finding is None:
+            raise LLMError(404, "Befund wurde nicht gefunden.")
+        if run.status not in {"WAITING_FOR_REVIEW", "COMPLETED"}:
+            raise LLMError(409, "Analyse ist noch nicht für die menschliche Prüfung bereit.")
+        if review.edited_statement is not None and review.edited_statement != finding.statement:
+            finding.original_statement = finding.original_statement or finding.statement
+            finding.statement = review.edited_statement
+            finding.superseded_reviews.extend(finding.reviews)
+            finding.reviews = []
+            finding.review_status = "PENDING"
+            finding.evidence_status = "NOT_CHECKED"
+            finding.evidence_detail = (
+                "Befund wurde durch einen Menschen bearbeitet; "
+                "vorherige Modellprüfung ist ungültig."
+            )
+        finding.human_status, finding.human_note = review.decision, review.note
+        if all(f.human_status != "PENDING" for f in values):
+            accepted = [f for f in values if f.human_status == "ACCEPTED"]
+            # The LLM synthesis is NEVER included in a final report: it is not human-approved.
+            run.final_report = "Menschlich freigegebene Befunde\n\n" + "\n\n".join(
+                f"{f.category}: {f.statement}\nBeleg (Seite {f.page}): {f.quote}\n"
+                f"Prüfstatus: {f.evidence_status}; Konflikt: {f.conflict}"
+                for f in accepted
+            )
+            run.status = "COMPLETED"
+        else:
+            run.status, run.final_report = "WAITING_FOR_REVIEW", None
+        run.validated_count = sum(f.evidence_status == "VALIDATED" for f in values)
+        return finding
 
     async def model_status(self) -> list[dict]:
         try:

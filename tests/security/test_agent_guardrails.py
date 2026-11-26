@@ -8,7 +8,7 @@ from app.agents.agent_factory import AgentFactory
 from app.agents.agent_registry import AgentRegistry
 from app.core.configuration import ExecutionLimits, RuntimeConfig
 from app.llm.errors import LLMError
-from app.schemas.domain import AgentProposals, AgentRecord, AgentSpec, RunRequest
+from app.schemas.domain import AgentProposals, AgentRecord, AgentSpec, AgentStatus, RunRequest
 from app.security.tool_permissions import validate_tools
 from pydantic import ValidationError
 
@@ -164,5 +164,93 @@ def test_runaway_delegation_in_full_workflow_is_stopped(tmp_path) -> None:
         assert run.status == "FAILED"
         assert len(dynamic) <= app.config.limits.max_dynamic_agents
         await app.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("existing_count", [1, 6])
+def test_delegation_budget_counts_registered_specialists_across_levels(tmp_path, existing_count):
+    class BudgetObservingProvider(WorkflowProvider):
+        def __init__(self):
+            super().__init__()
+            self.remaining = []
+
+        async def complete(self, model, messages, output_schema, max_tokens, *, unload):
+            response = await super().complete(
+                model, messages, output_schema, max_tokens, unload=unload
+            )
+            if "task: plan." in messages[0]["content"]:
+                plan = json.loads(response.text)
+                plan["tasks"][1]["depends_on"] = ["content"]
+                response.text = json.dumps(plan)
+            if "task: delegate." in messages[0]["content"]:
+                self.remaining.append(json.loads(messages[1]["content"])["limits"]["max_agents"])
+            return response
+
+    async def scenario():
+        app = runtime(tmp_path)
+        provider = BudgetObservingProvider()
+        app.gateway.providers["ollama"] = provider
+        run = app.start(RunRequest(mode="D"))
+        # Pre-existing agents are deliberately absent from the workflow's local leaves list.
+        # Terminal agents still consume the run's creation budget; other runs do not.
+        for index in range(existing_count + 1):
+            app.agents.register(
+                AgentRecord(
+                    agent_id=f"existing{index}",
+                    run_id=run.run_id if index < existing_count else "other-run",
+                    name="Existing specialist",
+                    role="specialist",
+                    model_id="qwen",
+                    manufacturer="Alibaba",
+                    task="synthetic",
+                    status=[AgentStatus.COMPLETED, AgentStatus.FAILED, AgentStatus.CANCELLED][
+                        index % 3
+                    ],
+                )
+            )
+        await app.tasks[run.run_id]
+        limit = app.config.limits.max_dynamic_agents
+        if existing_count == limit:
+            assert not provider.remaining
+            assert run.status == "FAILED" and "Subagentenlimit" in run.error
+            expected_count = existing_count
+        else:
+            assert provider.remaining == [limit - existing_count, limit - existing_count - 1]
+            assert run.status == "WAITING_FOR_REVIEW", run.error
+            expected_count = existing_count + 2
+        specialists = [a for a in app.agents.for_run(run.run_id) if a.role == "specialist"]
+        assert len(specialists) == expected_count <= limit
+        assert len(app.agents.for_run("other-run")) == 1
+        await app.close()
+
+    asyncio.run(scenario())
+
+
+def test_over_budget_proposal_creates_no_partial_agents(tmp_path):
+    class OverBudgetProvider(WorkflowProvider):
+        async def complete(self, model, messages, output_schema, max_tokens, *, unload):
+            response = await super().complete(
+                model, messages, output_schema, max_tokens, unload=unload
+            )
+            if "task: delegate." in messages[0]["content"]:
+                proposal = json.loads(response.text)
+                first = proposal["agents"][0]
+                proposal["agents"].append({**first, "agent_id": "extra_leaf"})
+                response.text = json.dumps(proposal)
+            return response
+
+    async def scenario():
+        app = runtime(tmp_path)
+        app.config.limits = app.config.limits.model_copy(update={"max_dynamic_agents": 1})
+        app.agents.limits = app.config.limits
+        app.gateway.providers["ollama"] = OverBudgetProvider()
+        try:
+            run = app.start(RunRequest(mode="D"))
+            await app.tasks[run.run_id]
+            assert run.status == "FAILED"
+            assert not [a for a in app.agents.for_run(run.run_id) if a.role == "specialist"]
+        finally:
+            await app.close()
 
     asyncio.run(scenario())

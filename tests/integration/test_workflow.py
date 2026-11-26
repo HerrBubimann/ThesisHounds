@@ -30,7 +30,7 @@ def test_complete_synthetic_workflow_and_human_gate(tmp_path, mode):
         if mode == "B":
             assert set(app.provider.calls) == {"qwen"}
         for finding in values:
-            app.human_review(finding.finding_id, HumanReview(decision="ACCEPTED"))
+            app.human_review(run.run_id, finding.finding_id, HumanReview(decision="ACCEPTED"))
         assert run.status == "COMPLETED" and run.final_report
         assert "MOCK-Entwurf" not in run.final_report
         await app.close()
@@ -82,6 +82,7 @@ def test_missing_independent_review_and_human_edit_history(tmp_path):
         finding = app.findings[run.run_id][0]
         previous = finding.statement
         app.human_review(
+            run.run_id,
             finding.finding_id,
             HumanReview(decision="ACCEPTED", edited_statement="Menschlich bearbeitet"),
         )

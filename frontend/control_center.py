@@ -171,11 +171,14 @@ def render_finding(finding: dict, run: dict) -> None:
             with st.form(f"review_{finding['finding_id']}"):
                 edit = st.text_area("Befund prüfen / bearbeiten", value=finding["statement"])
                 note = st.text_input("Prüfvermerk", value=finding["human_note"])
-                decision = st.selectbox("Entscheidung", ["ACCEPTED", "REJECTED"])
+                decision = st.selectbox("Entscheidung", ["ACCEPTED", "REJECTED"], index=None)
                 if st.form_submit_button("Menschliche Entscheidung speichern"):
+                    if decision is None:
+                        st.warning("Bitte eine menschliche Entscheidung auswählen.")
+                        return
                     request_backend(
                         "POST",
-                        f"/api/v1/findings/{finding['finding_id']}/review",
+                        f"/api/v1/runs/{run['run_id']}/findings/{finding['finding_id']}/review",
                         json={"decision": decision, "note": note, "edited_statement": edit},
                     )
                     st.rerun()

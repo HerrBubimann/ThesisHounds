@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
@@ -13,6 +14,32 @@ from app.security.policy_engine import PolicyEngine
 T = TypeVar("T", bound=BaseModel)
 
 
+def _validate_token_bounds(input_bound: int, output_bound: int) -> None:
+    if (
+        type(input_bound) is not int
+        or input_bound < 0
+        or type(output_bound) is not int
+        or output_bound < 1
+    ):
+        raise LLMError(422, "Tokenlimits müssen gültige ganzzahlige Grenzen sein.")
+
+
+def estimate_input_tokens(messages: list[dict[str, str]], schema: dict | None) -> int:
+    """Conservative reservation, not a model-specific tokenizer or measured usage.
+
+    Without a verified tokenizer for each model, reserve one token per serialized
+    UTF-8 byte rather than divide by an average characters/bytes-per-token ratio.
+    Include roles, JSON escaping and the schema, plus token margins for the model's
+    chat template and per-message framing. Templates can still exceed these margins;
+    reconcile reported usage after inference. No prompt text is persisted here.
+    """
+    payload = {"messages": messages}
+    if schema is not None:
+        payload["format"] = schema
+    serialized = json.dumps(payload, ensure_ascii=False)
+    return len(serialized.encode("utf-8")) + 512 + 32 * len(messages)
+
+
 @dataclass
 class CallBudget:
     max_calls: int
@@ -23,6 +50,7 @@ class CallBudget:
     unknown_token_calls: int = 0
 
     def reserve(self, input_bound: int, output_bound: int) -> None:
+        _validate_token_bounds(input_bound, output_bound)
         # Reserving before awaiting is atomic on this single asyncio event loop.
         if (
             self.calls >= self.max_calls
@@ -32,10 +60,14 @@ class CallBudget:
         self.calls += 1
         self.reserved_tokens += input_bound + output_bound
 
-    def record(self, response: Completion) -> None:
+    def record(self, response: Completion, *, reserved_input: int, reserved_output: int) -> None:
         if response.input_tokens is None or response.output_tokens is None:
             self.unknown_token_calls += 1
         self.observed_tokens += (response.input_tokens or 0) + (response.output_tokens or 0)
+        # Never refund a conservative reservation or a failed/unknown call. If the
+        # template or provider exceeds it, charge the excess before any further call.
+        self.reserved_tokens += max(0, (response.input_tokens or 0) - reserved_input)
+        self.reserved_tokens += max(0, (response.output_tokens or 0) - reserved_output)
 
 
 class LLMGateway:
@@ -72,13 +104,9 @@ class LLMGateway:
         capability = "structured_output" if output_type else "chat"
         if capability not in model.capabilities or model.provider not in self.providers:
             raise LLMError(503, "Provider oder Modellfähigkeit ist nicht verfügbar.")
-        # Byte length is a deliberately conservative input-token reservation, including schema.
         schema = output_type.model_json_schema() if output_type else None
-        input_bound = (
-            sum(len(m["content"].encode("utf-8")) for m in messages)
-            + len(str(schema or "").encode())
-            + 256
-        )
+        input_bound = estimate_input_tokens(messages, schema)
+        _validate_token_bounds(input_bound, max_tokens)
         if input_bound + max_tokens > model.context_length:
             raise LLMError(422, "Anfrage überschreitet das konservative Kontextbudget.")
         async with self.slots:
@@ -97,9 +125,11 @@ class LLMGateway:
             except BaseException:
                 budget.unknown_token_calls += 1
                 raise
-            budget.record(response)
+            budget.record(response, reserved_input=input_bound, reserved_output=max_tokens)
             if on_result:
                 on_result(response)
+            if budget.reserved_tokens > budget.max_tokens:
+                raise LLMError(429, "Gemeldeter Tokenverbrauch überschreitet das Modellbudget.")
         if output_type is None:
             return response, None
         try:

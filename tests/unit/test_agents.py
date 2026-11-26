@@ -80,3 +80,48 @@ def test_leaf_cannot_delegate_and_schema_forbids_unknown_fields():
         factory.create(spec, child)
     with pytest.raises(ValidationError):
         AgentSpec.model_validate({**spec.model_dump(), "classification": "PUBLIC"})
+
+
+@pytest.mark.parametrize("failure", ["invalid_spec", "duplicate_batch", "existing_id", "quota"])
+def test_factory_batch_rejection_does_not_register_valid_prefix(failure):
+    factory, parent, spec = setup_factory()
+    first = spec.model_copy(update={"agent_id": "first"})
+    second = spec.model_copy(update={"agent_id": "second"})
+    if failure == "invalid_spec":
+        second = second.model_copy(update={"allowed_tools": ["shell.execute"]})
+    elif failure == "duplicate_batch":
+        second = first
+    elif failure == "existing_id":
+        factory.create(second, parent)
+    else:
+        for index in range(factory.config.limits.max_dynamic_agents - 1):
+            factory.create(spec.model_copy(update={"agent_id": f"existing{index}"}), parent)
+    snapshot = {key: record.model_dump() for key, record in factory.registry.records.items()}
+    remaining = factory.registry.remaining_specialists(parent.run_id)
+    with pytest.raises(LLMError) as error:
+        factory.create_batch([first, second], parent)
+    assert error.value.status_code == (429 if failure == "quota" else 422)
+    assert {
+        key: record.model_dump() for key, record in factory.registry.records.items()
+    } == snapshot
+    assert factory.registry.remaining_specialists(parent.run_id) == remaining
+    # A rejected proposal must not consume IDs or prevent a corrected proposal.
+    child, _ = factory.create(first, parent)
+    assert child.agent_id == f"{parent.run_id}_first"
+
+
+def test_batch_exactly_fills_quota_and_terminal_agents_do_not_refund_it():
+    factory, parent, spec = setup_factory()
+    limit = factory.config.limits.max_dynamic_agents
+    created = factory.create_batch(
+        [spec.model_copy(update={"agent_id": f"batch{index}"}) for index in range(limit)], parent
+    )
+    assert len(created) == limit
+    assert factory.registry.remaining_specialists(parent.run_id) == 0
+    assert factory.registry.remaining_specialists("other-run") == limit
+    for child, _ in created:
+        factory.registry.transition(child, AgentStatus.CANCELLED)
+    with pytest.raises(LLMError) as error:
+        factory.create(spec, parent)
+    assert error.value.status_code == 429
+    assert len(factory.registry.for_run(parent.run_id)) == limit + 1

@@ -171,7 +171,7 @@ class MasterOrchestrator:
                                     )
                                 ]
                             )
-                        remaining = self.config.limits.max_dynamic_agents - len(leaves)
+                        remaining = self.agents.remaining_specialists(run.run_id)
                         if remaining < 1:
                             raise LLMError(429, "Subagentenlimit erreicht.")
                         return await self.engine.ask(
@@ -205,10 +205,11 @@ class MasterOrchestrator:
                         )
 
                     proposals = await self.engine.execute(supervisor, operation)
-                    for spec in proposals.agents:
-                        leaves.append(
-                            self.factory.create(spec, supervisor, dynamic=run.mode == "D")
+                    leaves.extend(
+                        self.factory.create_batch(
+                            proposals.agents, supervisor, dynamic=run.mode == "D"
                         )
+                    )
             return {"stage": "delegated"}
 
         def append_findings(result: FindingsOutput, agent: AgentRecord):

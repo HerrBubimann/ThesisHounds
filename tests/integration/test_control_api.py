@@ -40,7 +40,7 @@ def test_control_api_run_graph_findings_and_human_review(tmp_path):
         findings = client.get(f"/api/v1/runs/{run_id}/findings").json()
         for index, finding in enumerate(findings):
             response = client.post(
-                f"/api/v1/findings/{finding['finding_id']}/review",
+                f"/api/v1/runs/{run_id}/findings/{finding['finding_id']}/review",
                 json={"decision": "ACCEPTED" if index == 0 else "REJECTED"},
             )
             assert response.status_code == 200

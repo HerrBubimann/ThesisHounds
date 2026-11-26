@@ -84,11 +84,11 @@ async def findings(run_id: UUID, runtime: RuntimeDependency) -> list[Finding]:
     return runtime.findings[str(run_id)]
 
 
-@router.post("/findings/{finding_id}/review", response_model=Finding)
+@router.post("/runs/{run_id}/findings/{finding_id}/review", response_model=Finding)
 async def human_review(
-    finding_id: UUID, payload: HumanReview, runtime: RuntimeDependency
+    run_id: UUID, finding_id: UUID, payload: HumanReview, runtime: RuntimeDependency
 ) -> Finding:
-    return runtime.human_review(str(finding_id), payload)
+    return runtime.human_review(str(run_id), str(finding_id), payload)
 
 
 @router.get("/system/resources")

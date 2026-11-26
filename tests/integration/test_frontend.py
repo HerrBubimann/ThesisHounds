@@ -112,3 +112,51 @@ def test_control_center_displays_mock_run_and_graph():
         assert app.get("graphviz_chart")
     dot = render_tree([{**node, "name": "PRIVATE_DOT_INJECTION", "role": "bad;role"}], [])
     assert "PRIVATE_DOT_INJECTION" not in dot and "bad;role" not in dot
+
+
+@pytest.mark.parametrize("decision", ["ACCEPTED", "REJECTED"])
+def test_finding_review_requires_explicit_decision_and_uses_run_endpoint(decision):
+    from app.schemas.domain import Finding, RunRecord
+
+    run = RunRecord(
+        mode="D",
+        document_id="synthetic-demo",
+        criteria=["Methodik"],
+        status="WAITING_FOR_REVIEW",
+    ).model_dump(mode="json")
+    finding = Finding(
+        run_id=run["run_id"],
+        agent_id="synthetic",
+        model_id="qwen",
+        model="qwen3:8b",
+        manufacturer="Alibaba",
+        category="methodology",
+        kind="STRENGTH",
+        statement="Synthetic finding",
+        rationale="Synthetic rationale",
+        page=1,
+        quote="Synthetic quotation",
+    ).model_dump(mode="json")
+    with patch("frontend.control_center.request_backend", return_value=finding) as backend:
+        app = AppTest.from_string(
+            "from frontend.control_center import render_finding\n"
+            f"render_finding({finding!r}, {run!r})"
+        ).run()
+        assert not app.exception and app.selectbox[0].value is None
+        app.button[0].click().run()
+        assert not app.exception and app.warning
+        backend.assert_not_called()
+        app.selectbox[0].select(decision)
+        app.text_area[0].set_value("Human correction")
+        app.text_input[0].set_value("Human rationale")
+        app.button[0].click().run()
+        assert not app.exception
+        backend.assert_called_once_with(
+            "POST",
+            f"/api/v1/runs/{run['run_id']}/findings/{finding['finding_id']}/review",
+            json={
+                "decision": decision,
+                "note": "Human rationale",
+                "edited_statement": "Human correction",
+            },
+        )

@@ -83,12 +83,14 @@ Smoke-Test mit `--gpu --analysis --mode D` ausführen. Das gleiche Modell-Volume
 | GET | `/runs/{run_id}/graph` | Agentenknoten und Parent-Child-Kanten |
 | GET | `/runs/{run_id}/findings` | Befunde, Belege, Reviews, Konflikte und Human-Status |
 | POST | `/runs/{run_id}/cancel` | Lauf kontrolliert abbrechen |
-| POST | `/findings/{finding_id}/review` | Menschliche Entscheidung und optionale Bearbeitung |
+| POST | `/runs/{run_id}/findings/{finding_id}/review` | Menschliche Entscheidung und optionale Bearbeitung innerhalb des angegebenen Runs |
 | GET | `/system/resources` | Lokale Ressourcen und aktive Ausführungen |
 
 Zusätzlich `GET /health` für Backend-Liveness. Fehlender Modellbestand macht den Backend-Prozess nicht unhealthy. Ein verfügbarer Modelltag bestätigt noch keine erfolgreiche Inferenz.
 
 Run-Body: `{ "document_id": "synthetic-demo", "mode": "D", "task": "Prüfe die Arbeit", "criteria": ["Methodik", "Forschungsfrage"] }`. Klassifizierung, beliebige Dokumentpfade und Provider lassen sich nicht über den Body setzen. Review-Body: `{ "decision": "ACCEPTED", "note": "Beleg geprüft", "edited_statement": "Optional bearbeiteter Befund" }`; `REJECTED` ist ebenfalls möglich. Ohne Bearbeitung `edited_statement` weglassen.
+
+Der Review-Endpoint validiert beide IDs und sucht ausschließlich im angegebenen Run. Ein Befund aus einem anderen Run liefert 404; der frühere globale `/findings/{finding_id}/review`-Endpoint ist entfernt. Die Run-ID ist keine Benutzerberechtigung: Der synthetische Einzelnutzer-MVP besitzt weiterhin keine Anmeldung oder Eigentümerprüfung. Mehrbenutzerbetrieb benötigt Authentifizierung und Autorisierung für alle Run-Endpunkte (Backlog PROD-1).
 
 Fehler enthalten `detail` und bei zentral behandelten Fehlern zusätzlich `code`. 403 bedeutet Policy-Sperre, 404 fehlendes/bereinigtes Objekt, 409 unpassenden Zustand, 422 Schema-/Planfehler, 429 Budget-/Kapazitätslimit, 502 fehlerhafte Providerantwort, 503 fehlenden Provider/Modell, 504 Zeitlimit. Kein Fehler spiegelt vertrauliche Eingabewerte zurück. Hintergrundfehler stehen im Run-Status statt als nachträglicher HTTP-Fehler des Startaufrufs.
 
