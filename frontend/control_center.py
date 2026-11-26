@@ -37,7 +37,7 @@ def render_tree(nodes: list[dict], edges: list[dict]) -> str:
 
 def render_control_center() -> None:
     st.subheader("Multi-Agent Control Center")
-    st.caption("Synthetische Beispieldaten · echte lokale Modellaufrufe · menschliche Freigabe")
+    st.caption("Experimentelle A–D-Demo · synthetische Daten · keine unabhängige Erstbewertung")
     try:
         models = request_backend("GET", "/api/v1/models/status")["models"]
         resources = request_backend("GET", "/api/v1/system/resources")

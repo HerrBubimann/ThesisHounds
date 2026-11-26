@@ -12,6 +12,7 @@ from app.llm.providers.base import LLMProvider
 from app.monitoring.resources import sample_resources
 from app.schemas.domain import AgentStatus, Finding, HumanReview, RunRecord, RunRequest, now
 from app.services.document_store import DocumentStore
+from app.workflows.assessment_workflow import AssessmentWorkflow
 
 
 class AnalysisRuntime:
@@ -25,7 +26,9 @@ class AnalysisRuntime:
             self.config.models,
             {"ollama": provider},
             self.config.policy,
-            max_parallel=limits.max_parallel_model_calls,
+            max_parallel=min(
+                limits.max_parallel_model_calls, settings.max_concurrent_model_requests
+            ),
             sequential_loading=limits.sequential_model_loading,
         )
         self.agents = AgentRegistry(limits)
@@ -37,6 +40,8 @@ class AnalysisRuntime:
         self.tasks: dict[str, asyncio.Task] = {}
         self.budgets: dict[str, CallBudget] = {}
         self.maintenance: asyncio.Task | None = None
+        self.assessments = AssessmentWorkflow(settings, self.gateway, self.config)
+        self.assessments.legacy_active = lambda: sum(not t.done() for t in self.tasks.values())
 
     def maintain(self) -> None:
         self.maintenance = asyncio.create_task(self._maintain())
@@ -47,6 +52,7 @@ class AnalysisRuntime:
             self.cleanup()
 
     def cleanup(self, *, make_room: bool = False) -> None:
+        self.assessments.cleanup()
         completed = sorted(
             (r for r in self.runs.values() if r.finished_at is not None), key=lambda r: r.created_at
         )
@@ -67,6 +73,7 @@ class AnalysisRuntime:
         self.cleanup(make_room=True)
         if (
             sum(not task.done() for task in self.tasks.values())
+            + sum(not task.done() for task in self.assessments.tasks.values())
             >= self.config.limits.max_active_runs
         ):
             raise LLMError(429, "Maximale Anzahl aktiver Analysen erreicht.")
@@ -184,6 +191,7 @@ class AnalysisRuntime:
         return run
 
     async def close(self) -> None:
+        await self.assessments.close()
         if self.maintenance:
             self.maintenance.cancel()
             with suppress(asyncio.CancelledError):

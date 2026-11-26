@@ -5,8 +5,24 @@ from unittest.mock import patch
 
 import pytest
 
-from infrastructure.scripts import provision
+from infrastructure.scripts import provision, validate_docker
 from tests.fixtures import ROOT
+
+
+def test_university_stack_requires_separate_restricted_network():
+    try:
+        validate_docker.compose_command()
+    except SystemExit:
+        pytest.skip("Docker Compose CLI is unavailable")
+    config = validate_docker.render(["compose.university.yaml"])
+    assert not validate_docker.check_variant("university", config)
+    assert "ollama" not in config["services"]
+    assert config["networks"]["university_inference"]["external"] is True
+    config["networks"]["university_inference"]["external"] = False
+    assert validate_docker.check_variant("university", config)
+    config["services"]["backend"]["environment"]["ENABLE_PUBLIC_RESEARCH"] = "true"
+    errors = validate_docker.check_variant("university", config)
+    assert any("ENABLE_PUBLIC_RESEARCH" in error for error in errors)
 
 
 def test_runtime_has_no_external_network_or_public_api() -> None:

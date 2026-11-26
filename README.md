@@ -4,7 +4,9 @@
 
 Lokale, datenschutzorientierte Infrastructure Foundation des DHBW-Projekts zur Begutachtung wissenschaftlicher Arbeiten. Version 0.2 erweitert FastAPI, Streamlit und einen gemeinsamen Ollama-Service um einen kontrollierten LangGraph-Workflow mit mehreren Modellen und dynamischen Subagenten.
 
-Die Implementierung führt eine **synthetische Beispielanalyse** aus. Fachliche Bewertungslogik, PDF-Parser, RAG und produktive Benutzerverwaltung sind noch nicht implementiert. Die im Betrieb angezeigten Ergebnisse stammen aus tatsächlichen lokalen Modellaufrufen. Ausschließlich Tests verwenden ausdrücklich gekennzeichnete Mock-Provider.
+Die Implementierung führt **synthetische Beispielanalysen** aus. Der unabhängige Bewertungs-MVP ergänzt menschliche Erstbewertung, kriteriumsweise KI-Zweitbewertung, serverseitige Freigaben, Vergleich, Diskussion und menschliche Finalisierung. PA1/PA2/BA verwenden ausdrücklich inoffizielle Beispielprofile. PDF-Parser, produktives RAG und Benutzerverwaltung stehen noch aus. Im Betrieb stammen KI-Antworten aus lokalen Modellaufrufen; Tests verwenden gekennzeichnete Mock-Provider.
+
+Professorenfeedback: [Gap Analysis und Backlog](docs/architecture/professor_feedback_gap.md), [Umsetzungsstand](docs/architecture/implementation_status.md), [MVP-Anleitung](docs/architecture/assessment_mvp.md), [Hochschulbetrieb](docs/architecture/university_deployment.md), [Recherche](docs/research/state_of_the_art.md), [Risiken](docs/security/risk_register.md) und [offene Fragen](docs/stakeholders/open_questions.md). Öffentliche Recherche und KI-Punktevergabe bleiben deaktiviert. Die Sitzungsspeicherung ist flüchtig; echte studentische Arbeiten sind noch nicht freigegeben.
 
 ## Architektur
 
@@ -26,7 +28,7 @@ flowchart TB
     Runtime --- Docs[(Temporäre synthetische Dokumente)]
 ```
 
-Beide Laufzeitnetze sind intern. Nur das Frontend veröffentlicht einen Loopback-Port. Die Modellbereitstellung verwendet kurzzeitig eine separate internetfähige Konfiguration und stoppt vorher die Analyseanwendung.
+Im lokalen Compose-Stack sind beide Laufzeitnetze intern. Nur das Frontend veröffentlicht einen Loopback-Port. Die Modellbereitstellung verwendet kurzzeitig eine separate internetfähige Konfiguration und stoppt vorher die Analyseanwendung. Die separate Hochschulvariante benötigt ein durch die Hochschule abgesichertes Inferenznetz; siehe Betriebsanleitung.
 
 ## Voraussetzungen
 
@@ -81,7 +83,7 @@ Compose bindet `config/` schreibgeschützt ein. Nach Konfigurationsänderungen d
 
 Standardlimits: drei Supervisoren, sechs Subagenten, zwei aktive Agenten, **ein Modellaufruf gleichzeitig**, Delegationstiefe zwei, maximal drei Iterationen pro Subagent, 32 Modellaufrufe und 100000 konservativ reservierte Tokens pro Analyse. Das Laufzeitlimit beträgt eine Stunde. Standardmäßig wird das Modell nach jedem Aufruf entladen, um CPU-/GPU-Speicher freizugeben; dies kostet Ladezeit. Details und zulässige Konfigurationsgrenzen stehen in [Architektur](docs/architecture.md).
 
-`LOCAL_ONLY` ist der einzige aktivierbare Betriebsmodus dieser Version. `EXPERIMENTAL` ist als getrennte Policy-Grenze vorgesehen und wird hier beim Start abgewiesen. OpenAI, Anthropic, Google und vLLM sind nur über den Provider-Vertrag vorbereitete Erweiterungspunkte. Es gibt keinen externen Fallback und keine aktivierbare Cloud-Anbindung.
+`LOCAL_ONLY` bleibt die aktivierbare Datenschutzpolicy. Davon getrennt wählt `DEPLOYMENT_MODE` zwischen lokaler und explizit freigegebener hochschulinterner Ollama-Infrastruktur. `EXPERIMENTAL` wird weiterhin abgewiesen. Externe Provider sind nur vorbereitete Erweiterungspunkte; es gibt keinen externen Fallback und keine aktivierbare Cloud-Anbindung.
 
 ## Evaluationsmodi
 

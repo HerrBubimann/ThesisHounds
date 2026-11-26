@@ -3,6 +3,7 @@
 import streamlit as st
 
 from frontend.api_client import BackendError, request_backend
+from frontend.assessment_review import render_assessment_review
 from frontend.control_center import render_control_center
 
 st.set_page_config(page_title="ThesisHounds", page_icon="🐾", layout="wide")
@@ -91,8 +92,9 @@ if submitted:
 st.divider()
 st.subheader("Dokumente · In Vorbereitung")
 st.file_uploader("PDF-Upload (noch nicht verfügbar)", type=["pdf"], disabled=True)
-st.caption("PDF-Verarbeitung und fachliche Agentenlogik folgen in einer späteren Projektphase.")
+st.caption("Die unabhängige Begutachtung unten verwendet ein festes synthetisches Testdokument.")
 
 st.divider()
 if backend_ok:
+    render_assessment_review()
     st.fragment(run_every="5s")(render_control_center)()

@@ -5,6 +5,7 @@ variant, then checks the project's infrastructure rules. Exit code 1 on any viol
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ VARIANTS = {
     "gpu": ["compose.yaml", "compose.gpu.yaml"],
     "provision": ["compose.yaml", "compose.provision.yaml"],
     "ci-mock": ["compose.yaml", "compose.ci.yaml"],
+    "university": ["compose.university.yaml"],
 }
 EXPECTED_SERVICES = {"frontend", "backend", "ollama"}
 REQUIRED_FILES = [
@@ -48,6 +50,19 @@ def render(files: list[str]) -> dict:
         capture_output=True,
         text=True,
         check=False,
+        env={
+            **os.environ,
+            **(
+                {
+                    "OLLAMA_BASE_URL": "https://inference.example.invalid",
+                    "UNIVERSITY_OLLAMA_HOSTS": '["inference.example.invalid"]',
+                    "UNIVERSITY_INFERENCE_NETWORK": "synthetic-restricted-inference",
+                    "OLLAMA_AUTH_TOKEN": "",
+                }
+                if files == ["compose.university.yaml"]
+                else {}
+            ),
+        },
     )
     if result.returncode:
         raise ValueError(f"compose config failed: {result.stderr.strip()}")
@@ -59,13 +74,24 @@ def check_variant(name: str, config: dict) -> list[str]:
     services = config.get("services", {})
     networks = config.get("networks", {})
     volumes = config.get("volumes", {}) or {}
-    if set(services) != EXPECTED_SERVICES:
-        errors.append(f"services {sorted(services)} != {sorted(EXPECTED_SERVICES)}")
+    expected = EXPECTED_SERVICES - {"ollama"} if name == "university" else EXPECTED_SERVICES
+    if set(services) != expected:
+        errors.append(f"services {sorted(services)} != {sorted(expected)}")
     for network_name, network in networks.items():
         internal = bool(network.get("internal"))
-        online_allowed = name == "provision" and network_name == "inference"
+        online_allowed = (name == "provision" and network_name == "inference") or (
+            name == "university" and network_name == "university_inference"
+        )
         if internal == online_allowed:
             errors.append(f"network '{network_name}' internal={internal} is not allowed")
+        if (
+            name == "university"
+            and network_name == "university_inference"
+            and not network.get("external")
+        ):
+            errors.append(
+                "university: externally administered restricted inference network required"
+            )
     for service_name, service in services.items():
         where = f"service '{service_name}'"
         test = (service.get("healthcheck") or {}).get("test")
@@ -109,8 +135,18 @@ def check_variant(name: str, config: dict) -> list[str]:
         ollama.get("build") or ollama.get("image") != services.get("backend", {}).get("image")
     ):
         errors.append("ci-mock: ollama must reuse the backend image without building")
-    if name != "ci-mock" and ollama.get("environment", {}).get("OLLAMA_NO_CLOUD") != "1":
+    if (
+        name not in {"ci-mock", "university"}
+        and ollama.get("environment", {}).get("OLLAMA_NO_CLOUD") != "1"
+    ):
         errors.append("ollama: OLLAMA_NO_CLOUD=1 required")
+    if name == "university":
+        environment = services.get("backend", {}).get("environment", {})
+        if environment.get("DEPLOYMENT_MODE") != "university":
+            errors.append("university: deployment mode required")
+        for flag in ("ENABLE_PUBLIC_RESEARCH", "ENABLE_AI_SCORING"):
+            if environment.get(flag) != "false":
+                errors.append(f"university: {flag}=false required")
     return errors
 
 

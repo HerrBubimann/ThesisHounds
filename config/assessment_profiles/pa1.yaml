@@ -1,0 +1,35 @@
+# Inoffizielles Beispiel; keine freigegebenen DHBW-Bewertungskriterien.
+id: pa1-example
+work_type: PA1
+version: "0.1"
+status: EXAMPLE
+source: "ThesisHounds synthetic MVP example, 2026-11-26"
+subject_notes: "Exploratives Beispiel für PA1; Erwartungen mit Gutachtern klären."
+criteria:
+  - id: literature
+    category: content
+    description: "Sind Aussagen zum Forschungsstand nachvollziehbar belegt?"
+    expected_evidence: "Quellenangaben und Textstellen; fehlende Quellen als nicht bewertbar markieren."
+    instructions: "Keine Quellenexistenz oder Aktualität ohne Nachweis behaupten."
+    weight: 1
+    max_points: 10
+    required: true
+    source: "Synthetic example v0.1: literature"
+  - id: methodology
+    category: methodology
+    description: "Passt die beschriebene Methode zur Forschungsfrage?"
+    expected_evidence: "Forschungsfrage, Methodik, Grenzen der Schlussfolgerung."
+    instructions: "Stärken und Einschränkungen getrennt nennen."
+    weight: 1
+    max_points: 10
+    required: true
+    source: "Synthetic example v0.1: methodology"
+  - id: structure
+    category: formal
+    description: "Ist der argumentierende Aufbau im verfügbaren Text nachvollziehbar?"
+    expected_evidence: "Textliche Struktur; keine typografischen Annahmen."
+    instructions: "Keine Aussagen zu Schriftgröße, Layout oder unsichtbaren PDF-Informationen."
+    weight: 1
+    max_points: 10
+    required: true
+    source: "Synthetic example v0.1: structure"

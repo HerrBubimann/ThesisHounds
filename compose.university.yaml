@@ -1,0 +1,82 @@
+# Standalone stack: docker compose -f compose.university.yaml --env-file .env.university up -d
+# The external inference network MUST be provisioned with university-managed default-deny
+# firewall/VPN rules. Docker network membership alone is not an egress firewall.
+name: thesishounds-university
+
+x-security: &security
+  restart: "on-failure:3"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  frontend:
+    <<: *security
+    image: thesishounds/frontend:0.2.0
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    cpus: ${FRONTEND_CPUS:-1.0}
+    mem_limit: ${FRONTEND_MEMORY:-1g}
+    ports: ["127.0.0.1:${FRONTEND_PORT:-8501}:8501"]
+    environment:
+      BACKEND_URL: http://backend:8000
+      FRONTEND_REQUEST_TIMEOUT: ${FRONTEND_REQUEST_TIMEOUT:-320}
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+    networks: [frontend_api]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=1770"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    <<: *security
+    image: thesishounds/backend:0.2.0
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    cpus: ${BACKEND_CPUS:-2.0}
+    mem_limit: ${BACKEND_MEMORY:-1g}
+    environment:
+      DEPLOYMENT_MODE: university
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?Approved university HTTPS endpoint required}
+      UNIVERSITY_OLLAMA_HOSTS: ${UNIVERSITY_OLLAMA_HOSTS:?Exact approved host list required}
+      OLLAMA_AUTH_TOKEN: ${OLLAMA_AUTH_TOKEN:-}
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL:-qwen3:8b}
+      OLLAMA_REQUEST_TIMEOUT: ${OLLAMA_REQUEST_TIMEOUT:-300}
+      MAX_CONCURRENT_MODEL_REQUESTS: ${MAX_CONCURRENT_MODEL_REQUESTS:-1}
+      ENABLE_PUBLIC_RESEARCH: "false"
+      ENABLE_INTERNAL_RESEARCH: "false"
+      ENABLE_AI_SCORING: "false"
+      CONFIG_DIR: /app/config
+      DOCUMENT_STORE_DIR: /tmp/documents
+      LANGSMITH_TRACING: "false"
+      LANGCHAIN_TRACING_V2: "false"
+      OTEL_SDK_DISABLED: "true"
+    volumes: ["./config:/app/config:ro"]
+    expose: ["8000"]
+    networks: [frontend_api, university_inference]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001,mode=1770"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  frontend_api:
+    internal: true
+  university_inference:
+    external: true
+    name: ${UNIVERSITY_INFERENCE_NETWORK:?University-controlled restricted network required}

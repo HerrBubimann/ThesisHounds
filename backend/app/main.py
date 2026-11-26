@@ -1,3 +1,4 @@
+import ssl
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -6,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.api.assessments import router as assessment_router
 from app.api.control import router as control_router
 from app.api.routes import router
 from app.config import Settings
@@ -20,8 +22,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        tls = ssl.create_default_context(
+            cafile=str(config.ollama_ca_file) if config.ollama_ca_file else None
+        )
+        headers = (
+            {"Authorization": f"Bearer {config.ollama_auth_token.get_secret_value()}"}
+            if config.ollama_auth_token
+            else {}
+        )
         async with httpx.AsyncClient(
-            base_url=str(config.ollama_base_url), trust_env=False, follow_redirects=False
+            base_url=str(config.ollama_base_url),
+            trust_env=False,
+            follow_redirects=False,
+            verify=tls,
+            headers=headers,
         ) as client:
             runtime = AnalysisRuntime(config, OllamaProvider(config, client))
             application.state.runtime = runtime
@@ -65,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(router)
     application.include_router(control_router)
+    application.include_router(assessment_router)
     return application
 
 

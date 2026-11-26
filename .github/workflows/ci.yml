@@ -250,6 +250,8 @@ jobs:
           docker compose -f compose.yaml -f compose.provision.yaml config --quiet
           docker compose -f compose.yaml -f compose.ci.yaml config --quiet
       - name: Validate healthchecks, networks, volumes, ports, env and GPU reservation
+        # Includes standalone university rendering with synthetic .invalid endpoint;
+        # no university network, credentials or live models are needed in CI.
         run: python3 infrastructure/scripts/validate_docker.py
       - name: Dockerfile lint (BuildKit checks)
         run: |
