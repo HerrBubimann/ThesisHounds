@@ -12,7 +12,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY backend/requirements.lock /app/requirements.lock
-RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --require-hashes -r requirements.lock \
     && python -m pip uninstall --yes pip \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home app
