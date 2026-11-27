@@ -25,6 +25,8 @@ class ExecutionLimits(BaseModel):
     max_output_tokens: int = Field(default=2048, ge=128, le=4096)
     max_retries: int = Field(default=1, ge=0, le=2)
     max_conflict_reviews: int = Field(default=2, ge=0, le=6)
+    max_context_bytes: int = Field(default=12000, ge=256, le=64000)
+    capture_inference_resources: bool = False
     max_active_runs: int = Field(default=1, ge=1, le=2)
     max_retained_runs: int = Field(default=20, ge=1, le=100)
     retention_seconds: float = Field(default=3600, ge=1, le=86400)

@@ -14,7 +14,8 @@ flowchart LR
   end
   subgraph Private[Private processing boundary - DEVELOPMENT]
     Fixture[Server owned PUBLIC synthetic document] --> Store[UUID document store outside repository]
-    Store --> Agents[Scoped agents / fixed workflow]
+    Store --> Context[Scoped local chunks and feature embeddings - RAM only]
+    Context --> Agents[Scoped agents / fixed workflow]
     Agents --> Policy[Policy / classification / budgets]
     Policy --> Mock[In process mock - no network]
     Mock --> Findings[Server labelled observations]

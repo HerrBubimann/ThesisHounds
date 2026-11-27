@@ -216,6 +216,8 @@ jobs:
         run: |
           python -m app.evaluation.privacy_lab --output reports/privacy-ablation.json
           python -m app.evaluation.academic_benchmark --output reports/academic-benchmark.json
+          python -m app.evaluation.lab --all-variations --repeats 1 --output-dir reports/advanced-fairness
+          python -m app.evaluation.lab --all-ablations --repeats 1 --output-dir reports/advanced-ablation
       - name: Check generated artifacts for synthetic leakage canaries
         id: artifact-privacy
         if: ${{ !cancelled() }}

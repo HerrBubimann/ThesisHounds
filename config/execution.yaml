@@ -12,6 +12,8 @@ max_tokens: 100000
 max_output_tokens: 2048
 max_retries: 1
 max_conflict_reviews: 2
+max_context_bytes: 12000
+capture_inference_resources: false
 max_active_runs: 1
 max_retained_runs: 20
 retention_seconds: 3600

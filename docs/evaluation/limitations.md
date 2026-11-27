@@ -1,5 +1,21 @@
 # Limitations and outstanding prerequisites
 
+## Advanced Review, 27.11.2026
+
+Lokale Satz-/Kapitelretrievalheuristik mit Feature-Hash-Vektoren ist implementiert;
+sie ersetzt keine evaluierte gelernte Embeddingsuche. Strukturelle Aspektkandidaten,
+passende Zitate und Modellkonsens beweisen keine fachliche Beziehung oder Abwesenheit.
+Pseudonymisierung betrifft nur explizite Header und schützt nicht vor Reidentifikation.
+Adaptive Eskalationsregeln sind transparent, aber noch nicht fachlich kalibriert.
+Mock-Fairness und Komponentenablation prüfen Software, keine tatsächliche Modellgüte.
+Neue Ergebnisse: [Advanced Review](advanced_review_results.md).
+
+Mit dem Professor zu klären: freizugebender Kriterien-/Jahrgangsstand und kritische
+Befundarten; Referenzpassagen und Expertenadjudikation; erlaubte Identitätsmaskierung;
+lokale Embedding-/Modellartefakte und Hardware; maximal sinnvolle Reviewbudgets;
+Freigabe/Zweckbindung von Feedbackaggregation und einer Zeit-/Bias-Nutzungsstudie.
+Keine dieser Entscheidungen wird durch einen grün getesteten Mock vorweggenommen.
+
 Stand: 2026-11-26. Die Erweiterung liefert einen vollständig durchgängigen
 synthetischen Engineering-MVP, kein empirisch validiertes Zweitgutachtersystem.
 

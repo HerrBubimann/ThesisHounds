@@ -12,6 +12,7 @@ from app.assessments.ai_review import AISecondReviewer
 from app.assessments.comparison import compare
 from app.assessments.coverage import check_coverage
 from app.assessments.profile_registry import AssessmentProfile, ProfileRegistry
+from app.assessments.provenance import content_digest, snapshot
 from app.assessments.routine_checks import inventory
 from app.assessments.schemas import (
     AcademicDecision,
@@ -20,8 +21,10 @@ from app.assessments.schemas import (
     CriterionDecision,
     DiscussionOutput,
     DiscussionRequest,
+    FindingFeedback,
     HumanReviewSubmission,
 )
+from app.assessments.scientific_consistency import consistency_map
 from app.config import Settings
 from app.core.configuration import RuntimeConfig
 from app.knowledge.registry import InstitutionalRegistry
@@ -59,6 +62,9 @@ class Assessment:
     cohort: str | None = None
     institutional_rules: dict = field(default_factory=dict)
     academic_decisions: list[dict] = field(default_factory=list)
+    finding_feedback: list[dict] = field(default_factory=list)
+    provenance_snapshot: dict = field(default_factory=dict)
+    research_manifest: list[dict] = field(default_factory=list)
 
 
 class AssessmentWorkflow:
@@ -134,6 +140,7 @@ class AssessmentWorkflow:
             ),
         )
         self.access.create(record.id)
+        record.provenance_snapshot = snapshot(record, self.config)
         self.records[record.id] = record
         self.event(record, "PROFILE_SELECTED")
         return self.status(record.id)
@@ -165,6 +172,12 @@ class AssessmentWorkflow:
             "human_completed": record.human is not None,
             "ai_state": record.ai_state,
             "ai_released": record.ai_released,
+            "analysis_complete": record.ai_state == "COMPLETED"
+            and not any(
+                f.escalation.get("human_required", False)
+                for primary in record.ai
+                for f in [primary, *primary.supplemental]
+            ),
             "criteria_completed": len(record.ai) if record.ai_state == "COMPLETED" else 0,
             "criteria_total": len(record.profile.criteria),
             "deployment_mode": self.settings.deployment_mode,
@@ -190,6 +203,11 @@ class AssessmentWorkflow:
     def academic_checks(self, assessment_id: str) -> dict:
         record = self.released(assessment_id)
         result = self.academic.check(record.document, record.institutional_rules)
+        record.research_manifest = [
+            {**check, "checked_at": now().isoformat(), "entry_id": row["entry"]["id"]}
+            for row in result["citations"]["references"]
+            for check in row["checks"]
+        ]
         # Combining with human review metadata raises classification; no model call follows.
         result["classification"] = record.classification
         result["decisions"] = list(record.academic_decisions)
@@ -314,6 +332,10 @@ class AssessmentWorkflow:
             "audit": list(record.audit),
             "classification": record.classification,
             "coverage": check_coverage(record.profile, record.ai).__dict__,
+            "finding_feedback": list(record.finding_feedback),
+            "scientific_consistency": consistency_map(
+                record.document, structure_document(record.document)
+            ),
         }
 
     @staticmethod
@@ -330,9 +352,91 @@ class AssessmentWorkflow:
         return {
             **finding.model_dump(exclude={"supplemental"}),
             "human_approval": status,
+            "feedback_history": [
+                e for e in record.finding_feedback if e["finding_id"] == finding.finding_id
+            ],
+            "human_feedback_state": AssessmentWorkflow.feedback_state(record, finding.finding_id),
             "supplemental": [
                 AssessmentWorkflow.finding_view(record, f) for f in finding.supplemental
             ],
+        }
+
+    @staticmethod
+    def feedback_state(record: Assessment, finding_id: str) -> dict:
+        entries = [e for e in record.finding_feedback if e["finding_id"] == finding_id]
+        corrections = [e["correction"] for e in entries if e["action"] == "CORRECT"]
+        return {
+            "action": entries[-1]["action"] if entries else "PENDING",
+            "correction": corrections[-1] if corrections else None,
+            "supplements": [e["correction"] for e in entries if e["action"] == "SUPPLEMENT"],
+            "classification": Classification.RESTRICTED
+            if entries
+            else record.document.classification,
+        }
+
+    def feedback(self, assessment_id: str, feedback: FindingFeedback) -> dict:
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        ids = {v.finding_id for f in record.ai for v in [f, *f.supplemental]}
+        if feedback.finding_id not in ids:
+            raise LLMError(404, "Befund nicht gefunden.")
+        if len(record.finding_feedback) >= 100:
+            raise LLMError(429, "Feedbackversionslimit erreicht.")
+        if (
+            feedback.action in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE", "CORRECT"}
+            and feedback.reason is None
+        ):
+            raise LLMError(422, "Strukturierter Feedbackgrund erforderlich.")
+        if feedback.action in {"CORRECT", "SUPPLEMENT"} and not feedback.correction.strip():
+            raise LLMError(422, "Korrektur oder Ergänzung erforderlich.")
+        entry = {
+            **feedback.model_dump(),
+            "revision": len(record.finding_feedback) + 1,
+            "at": now().isoformat(),
+            "analysis_id": record.id,
+            "classification": Classification.RESTRICTED,
+            "automatic_training": False,
+        }
+        record.finding_feedback.append(entry)
+        record.classification = combine(record.classification, Classification.RESTRICTED)
+        self.event(record, "HUMAN_FINDING_FEEDBACK")
+        return entry
+
+    def provenance(self, assessment_id: str) -> dict:
+        record = self.released(assessment_id)
+        flat = [v for f in record.ai for v in [f, *f.supplemental]]
+        return {
+            **record.provenance_snapshot,
+            "classification": record.classification,
+            "current_document_matches_snapshot": content_digest(record.document.pages)
+            == record.provenance_snapshot["document_version_sha256"],
+            "ai_state": record.ai_state,
+            "analysis_complete": self.status(assessment_id)["analysis_complete"],
+            "findings": [
+                {
+                    "finding_id": f.finding_id,
+                    "criterion_id": f.criterion_id,
+                    "provenance": f.provenance,
+                    "context": f.context_trace,
+                    "performance": f.performance,
+                    "verification_status": f.verification_status,
+                    "verification_rounds": f.verification_rounds,
+                    "escalation": f.escalation,
+                }
+                for f in flat
+            ],
+            "research_sources": list(record.research_manifest),
+            "human_decisions": list(record.decisions),
+            "finding_feedback": list(record.finding_feedback),
+            "academic_decisions": list(record.academic_decisions),
+            "model_calls": record.budget.calls,
+            "observed_tokens": record.budget.observed_tokens,
+            "reserved_tokens": record.budget.reserved_tokens,
+            "unknown_token_calls": record.budget.unknown_token_calls,
+            "dynamic_agent_count": sum(f.origin == "ADAPTIVE" for f in flat),
+            "verification_round_count": sum(len(f.verification_rounds) for f in flat),
+            "cross_assessment_aggregation": "DISABLED_NO_ORGANIZATIONAL_APPROVAL",
         }
 
     def evidence(self, assessment_id: str, finding_id: str) -> dict:
@@ -466,6 +570,16 @@ class AssessmentWorkflow:
         available = {f.finding_id for f in [primary, *primary.supplemental]}
         if not set(decision.include_finding_ids) <= available:
             raise LLMError(422, "Freigabe enthält fremde oder unbekannte Befunde.")
+        selected = set(decision.include_finding_ids)
+        if decision.include_ai_finding:
+            selected.add(primary.finding_id)
+        latest_feedback = {e["finding_id"]: e for e in record.finding_feedback}
+        if any(
+            latest_feedback.get(key, {}).get("action")
+            in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"}
+            for key in selected
+        ):
+            raise LLMError(409, "Befundfeedback vor Übernahme klären.")
         entry = {
             **decision.model_dump(),
             "revision": len(record.decisions) + 1,
@@ -497,12 +611,25 @@ class AssessmentWorkflow:
                 selected.add(finding.finding_id)
             for value in [finding, *finding.supplemental]:
                 if value.finding_id in selected:
+                    feedback = [
+                        e for e in record.finding_feedback if e["finding_id"] == value.finding_id
+                    ]
+                    latest = feedback[-1] if feedback else {}
+                    if latest.get("action") in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"}:
+                        raise LLMError(409, "Befundfeedback vor Finalisierung klären.")
+                    feedback_state = self.feedback_state(record, value.finding_id)
+                    description = feedback_state["correction"] or value.description
                     text += (
-                        f"\nFreigegebener KI-Befund: {value.description}"
-                        f"\nBeleg (Seite {value.page}; Kapitel {value.chapter}): {value.quote}"
+                        f"\nFreigegebener Befund: {description}"
+                        f"\nOriginalbeleg des Modellvorschlags (Seite {value.page}; "
+                        f"Kapitel {value.chapter}): {value.quote}"
                         f"\nEvidenz: {value.evidence_status}; Unsicherheit: {value.uncertainty}"
                         f"\nGegenprüfung: {value.verification_status}; Konflikt: {value.conflict}"
                     )
+                    if feedback_state["correction"]:
+                        text += "\nMenschliche Korrektur; keine automatische Evidenzbestätigung."
+                    for supplement in feedback_state["supplements"]:
+                        text += "\nMenschliche Ergänzung: " + supplement
             parts.append(text)
         label = "Menschlich freigegeben" if record.terminal == "FINALIZED" else "Gutachtenentwurf"
         academic = {d["finding_id"]: d for d in record.academic_decisions}

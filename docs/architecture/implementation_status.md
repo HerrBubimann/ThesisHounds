@@ -1,5 +1,10 @@
 # Professor feedback delivery status
 
+Advanced Review 27.11.2026: [current integration and measured local checks](../evaluation/advanced_review_results.md).
+Scoped local retrieval, evidence/consistency states, adaptive escalation, provenance
+and structured finding feedback extend the existing pipeline. The historical table
+below does not override the current production blockers or imply real model validation.
+
 Security update 2026-11-26: the current application defaults to an in-process mock,
 blocks real content/network inference and refuses UNIVERSITY_SECURE startup.
 The following original delivery table does not authorize production use or override

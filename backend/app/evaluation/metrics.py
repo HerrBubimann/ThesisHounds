@@ -95,13 +95,18 @@ def quality_metrics(
 
 def consistency(rows: list[dict]) -> list[dict]:
     results = []
-    groups = {(r["architecture"], r["variation"]) for r in rows if r["status"] == "COMPLETED"}
-    for architecture, variation in sorted(groups):
+    groups = {
+        (r["architecture"], r["variation"], r.get("ablation", "baseline"))
+        for r in rows
+        if r["status"] == "COMPLETED"
+    }
+    for architecture, variation, ablation in sorted(groups):
         selected = [
             r
             for r in rows
             if (r["architecture"], r["variation"], r["status"])
             == (architecture, variation, "COMPLETED")
+            and r.get("ablation", "baseline") == ablation
         ]
         pairs = []
         for first, second in combinations(selected, 2):
@@ -125,6 +130,7 @@ def consistency(rows: list[dict]) -> list[dict]:
             {
                 "architecture": architecture,
                 "variation": variation,
+                "ablation": ablation,
                 "comparisons": pairs,
                 "status": "MEASURED" if pairs else "NEEDS_REPEATS",
             }
@@ -145,6 +151,7 @@ def variation_comparisons(rows: list[dict]) -> list[dict]:
                 and b["variation"] == "baseline"
                 and b["repeat"] == row["repeat"]
                 and b["status"] == "COMPLETED"
+                and b.get("ablation", "baseline") == row.get("ablation", "baseline")
             ),
             None,
         )
@@ -165,6 +172,76 @@ def variation_comparisons(rows: list[dict]) -> list[dict]:
                 if keys
                 else None,
                 "causal_bias_conclusion": "NOT_ESTABLISHED_BY_THIS_PILOT",
+                "ablation": row.get("ablation", "baseline"),
+                "outcome_change": outcome_change(baseline, row),
             }
         )
     return comparisons
+
+
+def outcome_summary(row):
+    from collections import Counter
+
+    flat = [v for f in row["findings"] for v in [f, *f.get("supplemental", [])]]
+    criticism = [f for f in flat if f["kind"] in {"WEAKNESS", "FORMAL_ISSUE", "SOURCE_ISSUE"}]
+    return {
+        "criticism_count": len(criticism),
+        "kinds": dict(Counter(f["kind"] for f in flat)),
+        "evidence_quality": dict(Counter(f.get("evidence_quality", "UNKNOWN") for f in flat)),
+        "judgments": {f["criterion_id"]: f["judgment"] for f in row["findings"]},
+        "optional_points": None,
+    }
+
+
+def outcome_change(first, second):
+    a, b = outcome_summary(first), outcome_summary(second)
+    return {
+        "criticism_count_delta": b["criticism_count"] - a["criticism_count"],
+        "kind_distribution_changed": a["kinds"] != b["kinds"],
+        "evidence_quality_changed": a["evidence_quality"] != b["evidence_quality"],
+        "judgment_consistent": a["judgments"] == b["judgments"],
+        "point_deviation": None,
+    }
+
+
+def ablation_comparisons(rows):
+    results = []
+    for row in rows:
+        if row.get("ablation", "baseline") == "baseline" or row["status"] != "COMPLETED":
+            continue
+        base = next(
+            (
+                b
+                for b in rows
+                if (
+                    b["architecture"],
+                    b["variation"],
+                    b["repeat"],
+                    b.get("ablation", "baseline"),
+                    b["status"],
+                )
+                == (row["architecture"], row["variation"], row["repeat"], "baseline", "COMPLETED")
+            ),
+            None,
+        )
+        if not base:
+            continue
+        results.append(
+            {
+                "architecture": row["architecture"],
+                "variation": row["variation"],
+                "repeat": row["repeat"],
+                "removed_component": row["ablation"],
+                "same_document_and_catalog": (base["dataset_sha256"], base["profile_sha256"])
+                == (row["dataset_sha256"], row["profile_sha256"]),
+                "changed_flags": [
+                    key
+                    for key in base["component_flags"]
+                    if base["component_flags"][key] != row["component_flags"][key]
+                ],
+                "model_call_delta": row["model_calls"] - base["model_calls"],
+                "outcome_change": outcome_change(base, row),
+                "causal_quality_benefit": "NOT_ESTABLISHED_WITHOUT_HUMAN_REFERENCES",
+            }
+        )
+    return results

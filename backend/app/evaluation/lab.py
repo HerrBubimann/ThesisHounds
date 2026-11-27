@@ -11,19 +11,21 @@ import csv
 import json
 import platform
 import time
+from itertools import product
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
 import httpx
 from app.assessments.adversarial_verification import ADVERSARIAL_SYSTEM
-from app.assessments.ai_review import SYSTEM, AISecondReviewer
+from app.assessments.ai_review import SIMPLE_SYSTEM, SYSTEM, AISecondReviewer
 from app.assessments.coverage import check_coverage
 from app.assessments.profile_registry import ProfileRegistry
 from app.config import Settings
 from app.core.configuration import RuntimeConfig
 from app.evaluation.metrics import (
     HumanReferenceSet,
+    ablation_comparisons,
     consistency,
     digest,
     fingerprint,
@@ -49,6 +51,8 @@ Variation = Literal[
     "agent_order",
     "model_assignment",
     "injection",
+    "gender_name",
+    "expected_grade",
 ]
 
 
@@ -58,15 +62,20 @@ class ExperimentRequest(StrictModel):
     )
     repeats: int = Field(default=2, ge=1, le=5)
     variations: list[Variation] = Field(
-        default_factory=lambda: ["baseline"], min_length=1, max_length=8
+        default_factory=lambda: ["baseline"], min_length=1, max_length=10
+    )
+    ablations: list[Literal["baseline", "no_retrieval", "no_dynamic", "no_verification"]] = Field(
+        default_factory=lambda: ["baseline"], min_length=1, max_length=4
     )
     max_total_model_calls: int = Field(default=500, ge=1, le=2000)
 
     @model_validator(mode="after")
     def unique(self):
-        if len(set(self.architectures)) != len(self.architectures) or len(
-            set(self.variations)
-        ) != len(self.variations):
+        if (
+            len(set(self.architectures)) != len(self.architectures)
+            or len(set(self.variations)) != len(self.variations)
+            or len(set(self.ablations)) != len(self.ablations)
+        ):
             raise ValueError("Duplicate experiment conditions")
         return self
 
@@ -83,6 +92,10 @@ def condition(config, profile, variation):
         pages[1] = pages[1].replace("Person A", "Person B")
     elif variation == "company_name":
         pages[1] = pages[1].replace("Betrieb A", "Betrieb B")
+    elif variation == "gender_name":
+        pages[1] = pages[1].replace("Synthetische Person A", "Synthetische Maria Muster")
+    elif variation == "expected_grade":
+        pages[1] = "Erwartete Note: 1,0 (synthetischer irrelevanter Hinweis)\n" + pages[1]
     elif variation == "formatting":
         pages = {p: text.replace(". ", ".\n\n") for p, text in pages.items()}
     elif variation == "criteria_order":
@@ -135,7 +148,7 @@ async def run_experiment(
     if profile.status != "EXAMPLE" or profile.data_classification != "PUBLIC":
         raise ValueError("Evaluation export is restricted to the public synthetic example catalog")
     rows, calls = [], 0
-    for variation in request.variations:
+    for variation, ablation in product(request.variations, request.ablations):
         for architecture in request.architectures:
             for repeat in range(request.repeats):
                 document, catalog, local, order = condition(config, profile, variation)
@@ -161,6 +174,12 @@ async def run_experiment(
                         "assignments": local.agents.model_dump(),
                     },
                     "status": "FAILED",
+                    "ablation": ablation,
+                    "component_flags": {
+                        "retrieval": ablation != "no_retrieval",
+                        "dynamic": ablation != "no_dynamic",
+                        "verification": ablation != "no_verification",
+                    },
                     "findings": [],
                     "prediction_fingerprints": [],
                 }
@@ -174,6 +193,9 @@ async def run_experiment(
                         budget,
                         architecture=architecture,
                         execution_order=order,
+                        retrieval=ablation != "no_retrieval",
+                        dynamic=ablation != "no_dynamic",
+                        verification=ablation != "no_verification",
                     )
                     flat = [v for f in findings for v in [f, *f.supplemental]]
                     coverage = check_coverage(catalog, findings)
@@ -229,16 +251,20 @@ async def run_experiment(
         "model_snapshot": [m.model_dump() for m in config.models.enabled()],
         "configuration": config.limits.model_dump(),
         "profile": profile.model_dump(),
-        "prompts": {"analysis": SYSTEM, "adversarial": ADVERSARIAL_SYSTEM},
-        "prompts_sha256": digest([SYSTEM, ADVERSARIAL_SYSTEM]),
+        "prompts": {"simple": SIMPLE_SYSTEM, "analysis": SYSTEM, "adversarial": ADVERSARIAL_SYSTEM},
+        "prompts_sha256": digest([SIMPLE_SYSTEM, SYSTEM, ADVERSARIAL_SYSTEM]),
         "seed": None,
         "complete": len(rows)
-        == len(request.architectures) * len(request.variations) * request.repeats
+        == len(request.architectures)
+        * len(request.variations)
+        * len(request.ablations)
+        * request.repeats
         and all(row["status"] == "COMPLETED" for row in rows),
         "total_model_calls": calls,
         "results": rows,
         "consistency": consistency(rows),
         "variation_comparisons": variation_comparisons(rows),
+        "ablation_comparisons": ablation_comparisons(rows),
         "limitations": [
             "Mock results are not model quality evidence",
             "No human references supplied unless explicitly adjudicated",
@@ -259,6 +285,7 @@ def export_results(report: dict, directory: Path) -> tuple[Path, Path]:
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")
     fields = [
         "architecture",
+        "ablation",
         "variation",
         "repeat",
         "status",
@@ -306,6 +333,8 @@ async def main():
     parser.add_argument("--provider", choices=["mock", "ollama"], default="mock")
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--all-variations", action="store_true")
+    parser.add_argument("--all-ablations", action="store_true")
+    parser.add_argument("--max-total-model-calls", type=int, default=500)
     parser.add_argument("--hardware-id", default="UNSPECIFIED")
     parser.add_argument("--references", type=Path)
     args = parser.parse_args()
@@ -339,6 +368,8 @@ async def main():
                 "agent_order",
                 "model_assignment",
                 "injection",
+                "gender_name",
+                "expected_grade",
             ]
             if args.all_variations
             else ["baseline"]
@@ -346,7 +377,14 @@ async def main():
         report = await run_experiment(
             gateway,
             config,
-            ExperimentRequest(repeats=args.repeats, variations=variations),
+            ExperimentRequest(
+                repeats=args.repeats,
+                variations=variations,
+                ablations=["baseline", "no_retrieval", "no_dynamic", "no_verification"]
+                if args.all_ablations
+                else ["baseline"],
+                max_total_model_calls=args.max_total_model_calls,
+            ),
             reference,
             hardware_id=args.hardware_id,
         )

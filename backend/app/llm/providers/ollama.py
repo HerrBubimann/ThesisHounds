@@ -147,6 +147,9 @@ class OllamaProvider:
                 model=data["model"],
                 input_tokens=data.get("prompt_eval_count"),
                 output_tokens=data.get("eval_count"),
+                load_duration_seconds=data["load_duration"] / 1_000_000_000
+                if data.get("load_duration") is not None
+                else None,
             )
         except (KeyError, TypeError, ValueError, ValidationError):
             raise LLMError(502, "Ollama hat eine ungültige Chatantwort geliefert.") from None

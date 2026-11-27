@@ -6,7 +6,9 @@ from dataclasses import asdict, dataclass
 HEADINGS = re.compile(
     r"^(?:(?P<number>\d+(?:\.\d+)*)\s+)?(?P<title>"
     r"Einleitung|Forschungsfrage|Methodik|Methode|Ergebnisse|Diskussion|Fazit|"
-    r"Zusammenfassung|Literaturverzeichnis|Literatur|References|Conclusion|Introduction)\b[:.]?",
+    r"Zusammenfassung|Zielsetzung|Theoretische Grundlagen|Theorie|Forschungsstand|"
+    r"Datenerhebung|Analyse|Limitationen|Literaturverzeichnis|Literatur|References|"
+    r"Conclusion|Introduction)\b[:.]?",
     re.I,
 )
 

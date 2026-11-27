@@ -1,12 +1,14 @@
 """Bounded attempts to refute findings; model agreement never proves correctness."""
 
 import json
+import time
 
 from app.assessments.schemas import AdversarialChallenge, AssessmentFinding
 from app.llm.errors import LLMError
 from app.llm.providers.ollama import OllamaProvider
 from app.security.classification import combine
 from app.security.information_flow import InformationLabel
+from app.services.context_management import LocalContextIndex
 from app.validation.evidence_validator import check_evidence
 
 ADVERSARIAL_SYSTEM = (
@@ -36,16 +38,27 @@ def ground_finding(finding: AssessmentFinding, document, structure) -> None:
     if block and not block.reliable:
         finding.evidence_detail += " Visuelle Extraktion des komplexen Objekts ungeprüft."
         finding.uncertainty = "HIGH"
+        finding.open_questions = list(
+            dict.fromkeys([*finding.open_questions, "UNVERIFIED_COMPLEX_OBJECT_EXTRACTION"])
+        )
     if result.status != "QUOTE_MATCHED":
         finding.uncertainty = "HIGH"
 
 
-async def verify_finding(gateway, config, finding, document, structure, budget, available):
+async def verify_finding(
+    gateway, config, finding, document, structure, budget, available, *, index=None, retrieval=True
+):
     if finding.assessment_id != document.analysis_id:
         raise LLMError(403, "VERIFICATION_SCOPE_DENIED")
     classification = combine(document.classification, finding.data_classification)
+    index = index or LocalContextIndex(
+        document.model_copy(update={"classification": classification})
+    )
+    if (index.analysis_id, index.document_id) != (document.analysis_id, document.document_id):
+        raise LLMError(403, "CONTEXT_SCOPE_DENIED")
     excluded = {finding.manufacturer}
     for iteration in range(min(2, config.limits.max_conflict_reviews)):
+        started, calls, tokens = time.monotonic(), budget.calls, budget.observed_tokens
         try:
             route = await gateway.route(
                 "evidence",
@@ -57,27 +70,50 @@ async def verify_finding(gateway, config, finding, document, structure, budget, 
                 resources=config.resource_budget,
             )
             model = gateway.registry.get(route.model_id, "reviewer")
-            _, challenge = await gateway.complete(
-                model.id,
-                "reviewer",
-                classification,
-                [
+
+            def builder(pages):
+                return [
                     {"role": "system", "content": ADVERSARIAL_SYSTEM},
                     {
                         "role": "user",
                         "content": json.dumps(
                             {
                                 "finding": finding.model_dump(
-                                    include=set(AdversarialChallenge.model_fields)
-                                    | {"description", "rationale", "page", "quote", "claim_type"}
+                                    include={
+                                        "description",
+                                        "rationale",
+                                        "page",
+                                        "quote",
+                                        "claim_type",
+                                        "supporting_passages",
+                                        "relationships",
+                                    }
                                 ),
-                                "untrusted_pages": document.pages,
+                                "untrusted_pages": pages,
                                 "prior_challenges": finding.verification_rounds,
+                                "context_is_complete": False,
+                                "missing_hits_are_not_absence": True,
                             },
                             ensure_ascii=False,
                         ),
                     },
-                ],
+                ]
+
+            messages, trace = index.fit(
+                builder,
+                finding.description + " Gegenbelege Limitationen Fazit",
+                model=model,
+                output_type=AdversarialChallenge,
+                category=finding.category,
+                expanded=True,
+                max_bytes=config.limits.max_context_bytes,
+                retrieval=retrieval,
+            )
+            _, challenge = await gateway.complete(
+                model.id,
+                "reviewer",
+                classification,
+                messages,
                 budget,
                 output_type=AdversarialChallenge,
                 max_tokens=768,
@@ -92,7 +128,13 @@ async def verify_finding(gateway, config, finding, document, structure, budget, 
             )
             finding.conflict, finding.uncertainty = True, "HIGH"
             finding.verification_rounds.append(
-                {"round": iteration + 1, "error_code": exc.status_code}
+                {
+                    "round": iteration + 1,
+                    "error_code": exc.status_code,
+                    "duration_seconds": time.monotonic() - started,
+                    "model_calls": budget.calls - calls,
+                    "observed_tokens": budget.observed_tokens - tokens,
+                }
             )
             break
         counter = check_evidence(document, challenge.counter_page, challenge.counter_quote)
@@ -106,6 +148,10 @@ async def verify_finding(gateway, config, finding, document, structure, budget, 
                 "routing_source": route.source,
                 "counter_evidence_status": counter.status,
                 "independence_basis": "DECLARED_MANUFACTURER_DIFFERENCE",
+                "context_trace": trace,
+                "duration_seconds": time.monotonic() - started,
+                "model_calls": budget.calls - calls,
+                "observed_tokens": budget.observed_tokens - tokens,
                 "mocked": route.model_digest == "MOCK"
                 or not isinstance(gateway.providers["ollama"], OllamaProvider),
             }

@@ -193,6 +193,14 @@ def render_comparison(path, record):
     st.caption(
         "Vergleichsstatus vergleicht Einschätzungen; er beweist keine sachliche Richtigkeit."
     )
+    render_finding_feedback(path, comparison, writable=record["state"] != "FINALIZED")
+    with st.expander("Analyseherkunft und Ressourcen"):
+        if st.button("Geschützte Provenance anzeigen"):
+            st.text(
+                json.dumps(
+                    request_backend("GET", path + "/provenance"), ensure_ascii=False, indent=2
+                )
+            )
     for entry in comparison["discussion"]:
         st.text(f"Frage: {entry['question']}\nPrüfung: {entry['answer']}")
     if record["state"] == "FINALIZED":
@@ -261,6 +269,69 @@ def render_comparison(path, record):
         if st.button("Gutachtenentwurf abschließend menschlich freigeben"):
             request_backend("POST", path + "/finalize", json={"confirmed": True})
             st.rerun()
+
+
+def render_finding_feedback(path, comparison, *, writable):
+    with st.expander("Strukturiertes Befundfeedback"):
+        st.caption(
+            "Versioniert und lokal. Kein Training; Befundfeedback ersetzt keine Schlussfreigabe."
+        )
+        for entry in comparison.get("finding_feedback", []):
+            st.text(json.dumps(entry, ensure_ascii=False))
+        if not writable:
+            return
+        findings = [
+            f
+            for row in comparison["criteria"]
+            for f in [row["ai"], *row["ai"].get("supplemental", [])]
+        ]
+        with st.form("finding_feedback"):
+            finding_id = st.selectbox(
+                "Befund",
+                [f["finding_id"] for f in findings],
+                format_func=lambda key: next(
+                    f["criterion_id"] + ": " + f["description"]
+                    for f in findings
+                    if f["finding_id"] == key
+                ),
+            )
+            actions = {
+                "Akzeptieren": "ACCEPT",
+                "Ablehnen": "REJECT",
+                "Korrigieren": "CORRECT",
+                "Ergänzen": "SUPPLEMENT",
+                "Nicht relevant": "NOT_RELEVANT",
+                "Nicht ausreichend belegt": "INSUFFICIENT_EVIDENCE",
+            }
+            reasons = {
+                "Falsche fachliche Aussage": "WRONG_STATEMENT",
+                "Fehlender Kontext": "MISSING_CONTEXT",
+                "Unzutreffendes Kriterium": "WRONG_CRITERION",
+                "Fehlerhafte Quellenprüfung": "SOURCE_ERROR",
+                "Unberechtigte Kritik": "UNJUSTIFIED_CRITICISM",
+                "Unzureichende Evidenz": "INSUFFICIENT_EVIDENCE",
+                "Doppelter Befund": "DUPLICATE",
+            }
+            action = st.selectbox("Befundaktion", list(actions), index=None)
+            reason = st.selectbox("Feedbackgrund", list(reasons), index=None)
+            rationale = st.text_area("Feedbackbegründung")
+            correction = st.text_area("Korrektur / Ergänzung")
+            if st.form_submit_button("Befundfeedback speichern"):
+                if action is None:
+                    st.warning("Befundaktion ausdrücklich auswählen.")
+                else:
+                    request_backend(
+                        "POST",
+                        path + "/finding-feedback",
+                        json={
+                            "finding_id": finding_id,
+                            "action": actions[action],
+                            "reason": reasons.get(reason),
+                            "rationale": rationale,
+                            "correction": correction,
+                        },
+                    )
+                    st.rerun()
 
 
 def render_rules(resolved):

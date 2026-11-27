@@ -1,5 +1,9 @@
 # Erneutes Privacy-/Security-Hardening: lokale Ergebnisse
 
+Dieser Bericht beschreibt die vorherige Sicherheitsiteration. Der anschließende
+[Advanced-Review-Stand](../evaluation/advanced_review_results.md) enthält aktuelle
+Gesamttestzahlen, weitere Privacyregressionen und Scans der neuen App-Images.
+
 Nachweisstand: **27.11.2026, Europe/Berlin**. Technische Arbeitsgrundlage, keine
 rechtliche, fachliche oder organisatorische Hochschulfreigabe. Ausschließlich
 Quellcode, synthetische Fixtures und geprüfte öffentliche Unterlagen; keine echte

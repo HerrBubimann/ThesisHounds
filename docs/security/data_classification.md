@@ -30,7 +30,10 @@ deshalb weiter ausschließlich die PUBLIC-Fixture sehen. Diskussion und gemischt
 Berichte übernehmen dagegen RESTRICTED. Strukturierte Modelloutputs enthalten
 keine autoritative Klassifizierung; der Server ergänzt sie nach der Validierung.
 
-OCR, Chunks, Embeddings, Vektorspeicher und private Dokumentparser sind **nicht vorhanden**.
-Für ihre spätere Einführung ist dasselbe Label einschließlich Zugriffsbereich
-verpflichtend, bevor irgendein neuer Datenfluss freigegeben wird. Die generischen
-IFC-Tests für Embeddings beweisen die Labelregel, keinen existierenden Embedder.
+Lokale Textchunks und Feature-Hash-Embeddings tragen jetzt unveränderliche Klasse,
+Analyse-ID und Dokument-ID. Der Index lebt ausschließlich im einzelnen Review;
+kein globaler Cache und keine externe Embedding-API. Fremde Analysen/Dokumente
+und nicht freigegebene Seiten werden auch bei erweiterter Suche ausgeschlossen.
+OCR, persistente Vektorspeicher und private Dokumentparser sind weiterhin nicht
+freigegeben. Vor deren Einführung bleibt dieselbe Label-/Scopeprüfung verpflichtend.
+Siehe [Kontextmanagement](../architecture/context_management.md).

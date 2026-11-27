@@ -11,6 +11,7 @@ from app.assessments.schemas import (
     CriterionDecision,
     DiscussionRequest,
     ExplicitRelease,
+    FindingFeedback,
     HumanReviewSubmission,
 )
 from app.workflows.assessment_workflow import AssessmentWorkflow
@@ -78,6 +79,16 @@ async def release(assessment_id: UUID, payload: ExplicitRelease, service: Depend
 @router.get("/{assessment_id}/comparison")
 async def comparison(assessment_id: UUID, service: Dependency):
     return service.comparison(str(assessment_id))
+
+
+@router.get("/{assessment_id}/provenance")
+async def provenance(assessment_id: UUID, service: Dependency):
+    return service.provenance(str(assessment_id))
+
+
+@router.post("/{assessment_id}/finding-feedback")
+async def finding_feedback(assessment_id: UUID, payload: FindingFeedback, service: Dependency):
+    return service.feedback(str(assessment_id), payload)
 
 
 @router.post("/{assessment_id}/discussion")

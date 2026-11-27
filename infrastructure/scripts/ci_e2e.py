@@ -65,7 +65,7 @@ while time.monotonic() < deadline:
         break
     time.sleep(0.2)
 assert state['ai_state'] == 'COMPLETED', 'criterion review did not complete'
-for embargoed in ('/comparison', '/academic-checks'):
+for embargoed in ('/comparison', '/academic-checks', '/provenance'):
     try:
         call(path + embargoed)
     except urllib.error.HTTPError as error:
@@ -88,6 +88,17 @@ assert comparison['coverage']['complete']
 assert any(row['ai']['supplemental'] for row in comparison['criteria'])
 assert all(row['ai']['verification_rounds'] for row in comparison['criteria'])
 finding = comparison['criteria'][0]['ai']
+assert finding['context_trace']['classification'] == 'PUBLIC'
+trace = finding['context_trace']
+assert trace['estimated_input_tokens'] + trace['output_reservation'] <= trace['model_context_limit']
+assert not finding['context_trace']['absence_proven']
+call(path + '/finding-feedback', {'finding_id': finding['finding_id'], 'action': 'CORRECT',
+    'reason': 'MISSING_CONTEXT', 'rationale': 'Synthetic human feedback',
+    'correction': 'Synthetic corrected finding'})
+provenance = call(path + '/provenance')
+assert provenance['current_document_matches_snapshot'] and provenance['finding_feedback']
+assert provenance['classification'] == 'RESTRICTED' and not provenance['automatic_training']
+assert provenance['model_calls'] > 0 and provenance['findings']
 evidence = call(path + '/findings/' + finding['finding_id'] + '/evidence')
 assert evidence['matched'] and evidence['quote'] in evidence['original_text']
 call(path + '/manual-review', {'confirmed': True})
@@ -100,6 +111,7 @@ assert draft['label'] == 'Menschlich freigegeben'
 assert 'MOCK:' not in draft['text']
 print('OK  criterion E: routing, coverage, supplements, verification, evidence, human final')
 print('OK  Mosbach DS25: candidates, conflicts, embargoed offline checks, human decision')
+print('OK  advanced review: scoped contexts, budgets, private provenance, versioned feedback')
 """
 
 

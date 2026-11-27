@@ -1,9 +1,16 @@
 # ThesisHounds
 
+**Advanced Review 27.11.2026:** Lokales Kontextmanagement, strukturierte
+Konsistenz-/Evidenzprüfung, bedarfsgebundene Eskalation, geschützte Provenance und
+versioniertes Befundfeedback sind im bestehenden Reviewpfad integriert.
+**627 Tests, 89,08 % Coverage**; Fairness/Ablation bislang ausschließlich mit Mocks.
+[Audit](docs/architecture/advanced_review_audit.md) ·
+[Ergebnisse und Grenzen](docs/evaluation/advanced_review_results.md).
+
 **Security-Folgeaudit 27.11.2026:** Frontend-IP-Pinning, getrennte Modellbereitstellung,
 Manifest-Digestprüfung, Bibliografie-IFC und Größen-/Zeitlimits ergänzt.
 568 lokale Tests bestanden; bekannte offene Basisimagebefunde und Produktionsblocker
-stehen im [aktuellen Hardening-Bericht](docs/security/hardening_results.md).
+stehen im [Bericht dieser Sicherheitsiteration](docs/security/hardening_results.md).
 
 **Mosbach-Erweiterung 27.11.2026:** Quellengebundene Kandidatenprofile für PA1/DS25,
 PA2/DS24 und BA/DS23, lokale Knowledge-Base-/Metadatenimporte, Formalien-/Quellenprüfung

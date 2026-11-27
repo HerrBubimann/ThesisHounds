@@ -1,5 +1,9 @@
 # Scientific engineering results
 
+Historischer Stand dieser Engineering-Iteration. Aktuelle Ergebnisse einschließlich
+Kontextmanagement, Fairness/Ablation, Feedback und 627 Regressionen:
+[Advanced Review](advanced_review_results.md).
+
 Stand: 2026-11-26. Abschließender lokal beobachteter Stand dieser Erweiterung.
 Es wurden ausschließlich synthetische Daten und Mock-Provider verwendet.
 

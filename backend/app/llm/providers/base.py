@@ -12,6 +12,7 @@ class Completion(BaseModel):
     model: str
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
+    load_duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     data_classification: Classification = Classification.RESTRICTED
 
 

@@ -28,8 +28,12 @@ zusätzlich jede öffentliche externe Modellverarbeitung deaktiviert.
 - Die App verwendet einen deterministischen `DemoProvider` ohne Netzwerk-/Datei-I/O.
   Dieser simuliert Abläufe, keine fachliche Modellleistung. Kein Modellfallback.
 - Nur das serverseitige synthetische Dokument ist adressierbar; keine Uploadroute,
-  kein PDF-/OCR-/Embedding-/Vektordatenbankpfad. Freier `/chat` ist gesperrt;
+  kein privater PDF-/OCR-/persistenter Vektordatenbankpfad. Freier `/chat` ist gesperrt;
   ausschließlich das feste Signal `Test` ist zugelassen.
+- Lokale Textchunks und Feature-Hash-Vektoren bleiben im analyse-/dokumentbezogenen
+  Reviewkontext. Kein externer Embedder oder globaler Index. Feedback/Provenance
+  unterliegen ACL, Erstbewertungs-/Ergebnisembargo, höchster Klasse und Parent-TTL.
+  Keine automatische Trainingsnutzung oder Feedbackaggregation.
 - `Classification`: PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED; unbekannt/fehlend
   ergibt RESTRICTED. SYNTHETIC ist Herkunft, keine zusätzliche Schutzklasse.
 - `InformationLabel` ist unveränderlich, verbindet Quellen nur innerhalb einer

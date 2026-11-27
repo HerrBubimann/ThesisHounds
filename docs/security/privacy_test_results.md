@@ -1,6 +1,6 @@
 # Privacy test results
 
-**Aktueller Sicherheitsstand:** [Hardening-Nachweise vom 27.11.2026](hardening_results.md).
+**Aktueller Nachweisstand:** [Advanced Review vom 27.11.2026](../evaluation/advanced_review_results.md).
 Die folgenden Zahlen sind historisch und keine aktuelle Hochschulabnahme.
 
 Die nachstehenden Zähler dokumentieren die Privacy-Basis vor der wissenschaftlichen

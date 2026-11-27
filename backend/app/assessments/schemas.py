@@ -56,6 +56,51 @@ class AIObservation(StrictModel):
     uncertainty: Literal["LOW", "HIGH", "UNKNOWN"] = "UNKNOWN"
     claim_type: Literal["TEXT", "ABSENCE"] = "TEXT"
     required_context: list[int] = Field(default_factory=list, max_length=100)
+    supporting_passages: list["EvidencePassage"] = Field(default_factory=list, max_length=4)
+    relationships: list["ScientificRelationship"] = Field(default_factory=list, max_length=4)
+
+
+class EvidencePassage(StrictModel):
+    page: int = Field(ge=1)
+    quote: str = Field(min_length=1, max_length=800)
+
+
+class ScientificRelationship(StrictModel):
+    source: Literal[
+        "QUESTION",
+        "OBJECTIVE",
+        "THEORY",
+        "PRIOR_WORK",
+        "METHOD",
+        "DATA",
+        "ANALYSIS",
+        "RESULTS",
+        "DISCUSSION",
+        "LIMITATIONS",
+        "CONCLUSION",
+    ]
+    target: Literal[
+        "QUESTION",
+        "OBJECTIVE",
+        "THEORY",
+        "PRIOR_WORK",
+        "METHOD",
+        "DATA",
+        "ANALYSIS",
+        "RESULTS",
+        "DISCUSSION",
+        "LIMITATIONS",
+        "CONCLUSION",
+    ]
+    relation: Literal[
+        "ALIGNED",
+        "POSSIBLE_CONTRADICTION",
+        "UNANSWERED",
+        "UNSUPPORTED_CONCLUSION",
+        "NOT_ASSESSABLE",
+    ]
+    rationale: str = Field(min_length=1, max_length=400)
+    passages: list[EvidencePassage] = Field(default_factory=list, max_length=4)
 
 
 class AdversarialChallenge(StrictModel):
@@ -98,6 +143,44 @@ class AssessmentFinding(AIObservation):
     conflict: bool = False
     origin: Literal["MANDATORY", "ADAPTIVE"] = "MANDATORY"
     supplemental: list["AssessmentFinding"] = Field(default_factory=list, max_length=6)
+    evidence_quality: Literal[
+        "DIRECT_EVIDENCE",
+        "MULTIPLE_EVIDENCE",
+        "INFERRED",
+        "CONTRADICTORY",
+        "INSUFFICIENT",
+        "NOT_ASSESSABLE",
+    ] = "NOT_ASSESSABLE"
+    supporting_evidence: list[dict] = Field(default_factory=list)
+    contradicting_evidence: list[dict] = Field(default_factory=list)
+    relationship_checks: list[dict] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    unverifiable_aspects: list[str] = Field(default_factory=list)
+    context_trace: dict = Field(default_factory=dict)
+    escalation: dict = Field(default_factory=dict)
+    performance: dict = Field(default_factory=dict)
+    provenance: dict = Field(default_factory=dict)
+
+
+class FindingFeedback(StrictModel):
+    finding_id: str = Field(min_length=1, max_length=100)
+    action: Literal[
+        "ACCEPT", "REJECT", "CORRECT", "SUPPLEMENT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"
+    ]
+    reason: (
+        Literal[
+            "WRONG_STATEMENT",
+            "MISSING_CONTEXT",
+            "WRONG_CRITERION",
+            "SOURCE_ERROR",
+            "UNJUSTIFIED_CRITICISM",
+            "INSUFFICIENT_EVIDENCE",
+            "DUPLICATE",
+        ]
+        | None
+    ) = None
+    rationale: str = Field(min_length=1, max_length=1000)
+    correction: str = Field(default="", max_length=1600)
 
 
 class DiscussionRequest(StrictModel):

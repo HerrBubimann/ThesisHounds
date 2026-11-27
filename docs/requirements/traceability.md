@@ -1,5 +1,23 @@
 # Requirements traceability and engineering gap analysis
 
+## Advanced Review, 27.11.2026
+
+Der [Audit](../architecture/advanced_review_audit.md) priorisiert bestehende Komponenten.
+Der [Ergebnisbericht](../evaluation/advanced_review_results.md) dokumentiert die
+tatsächlich getestete Umsetzung; fachliche Validierung bleibt getrennt.
+
+| ID | Projektbeitrag | Implementierung / Nachweis | Erfüllungsgrenze |
+|---|---|---|---|
+| ADV-1 | OFF-2/3/5: lokaler Kontext | context_management, vorhandene Document Intelligence, Kriteriums-/Challengeintegration; test_context_management | Heuristik/Feature-Hash, keine evaluierte gelernte Embeddingsuche |
+| ADV-2 | OFF-3/5: wissenschaftliche Beziehungen | ScientificRelationship, consistency_map, Mehrspanprüfung; test_review_intelligence | geerdete Vorschläge, keine automatisch bewiesenen Widersprüche |
+| ADV-3 | OFF-2/3/4: kontrollierte Agentik | plan_escalation, vorhandene Factory/Gateway, Pflichtkriterien zuerst, Quoten-/Fehlerfragen | Regeln noch nicht fachlich kalibriert; echte Modellgüte offen |
+| ADV-4 | OFF-3/4/5: Evidenz | sechs Qualitätszustände, Gegenbelege, Original-/Kontextrückprüfung, unverlöschte Verifikationsrunden | Quote/Modellkonsens keine Wahrheit; visuelle Extraktion ungeprüft |
+| ADV-5 | OFF-4/5: Neutralität | Headerpseudonymisierung, sechs Fairnessfaktoren und Paarmetriken; test_advanced_evaluation | Mockprüfung, keine empirische Fairness-/Anonymitätsgarantie |
+| ADV-6 | OFF-2/3/4/5: Nachvollziehbarkeit | Provenance-Snapshot, Modell-/Prompt-/Regel-/Quellen-/Entscheidungsversionen; test_finding_feedback | Git/Quantisierung ohne Beleg UNKNOWN; keine exakte Wiederholbarkeit |
+| ADV-7 | OFF-1/4/5: Gutachterfeedback | sechs Aktionen, strukturierte Gründe, History, geschützte UI/API und Entwurfsprüfung | keine automatische Trainings-/Goldlabel-/Aggregationsnutzung |
+| ADV-8 | OFF-2/3/5: robuste Ressourcensteuerung | Retries, Timeouts, Kriteriumscalls/-zeiten, Kontext/RSS, optionale VRAM-/Ladesnapshots | keine physische Peakmessung oder dauerhafte Recovery |
+| ADV-9 | OFF-5: Evaluation/Informationssicherheit | A–E plus Einzelkomponentenablation, 627 Tests/313 Privacytests, CI-Benchmarks und Docker-E2E/Netzprobe | keine Remote-CI-/Hochschul-/Expertenabnahme |
+
 ## Erneutes Security-Hardening, 27.11.2026
 
 Die bestehende Zuordnung zu OFF-1 bis OFF-5 bleibt erhalten. Konkrete zusätzliche
