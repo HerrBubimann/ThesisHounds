@@ -85,7 +85,7 @@ assert all(row['status'] == 'MANUAL_REVIEW_REQUIRED' for row in academic['formal
 call(path + '/academic-decisions', {'finding_id': academic['formal']['checks'][0]['finding_id'],
     'decision': 'ACCEPTED', 'rationale': 'Synthetic human note; no official release'})
 assert comparison['coverage']['complete']
-assert any(row['ai']['supplemental'] for row in comparison['criteria'])
+assert not any(row['ai']['supplemental'] for row in comparison['criteria'])
 assert all(row['ai']['verification_rounds'] for row in comparison['criteria'])
 finding = comparison['criteria'][0]['ai']
 assert finding['context_trace']['classification'] == 'PUBLIC'
@@ -96,6 +96,9 @@ call(path + '/finding-feedback', {'finding_id': finding['finding_id'], 'action':
     'reason': 'MISSING_CONTEXT', 'rationale': 'Synthetic human feedback',
     'correction': 'Synthetic corrected finding'})
 provenance = call(path + '/provenance')
+assert provenance['adaptive_planning']['mocked']
+assert provenance['adaptive_planning']['status'] == 'VALIDATED_PROPOSAL'
+assert not provenance['adaptive_planning']['proposals']
 assert provenance['current_document_matches_snapshot'] and provenance['finding_feedback']
 assert provenance['classification'] == 'RESTRICTED' and not provenance['automatic_training']
 assert provenance['model_calls'] > 0 and provenance['findings']
