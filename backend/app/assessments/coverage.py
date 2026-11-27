@@ -32,3 +32,21 @@ def check_coverage(profile: AssessmentProfile, findings: list[AssessmentFinding]
         tuple(sorted(unexpected)),
         tuple(sorted(f.criterion_id for f in findings if f.judgment == "NOT_ASSESSABLE")),
     )
+
+
+def criterion_states(profile, findings, execution_state):
+    """Outcome states, for released views only; never infer success from missing output."""
+    values = {f.criterion_id: f for f in findings}
+    return {
+        c.id: ("NOT_ASSESSABLE" if values[c.id].judgment == "NOT_ASSESSABLE" else "REVIEWED")
+        if c.id in values
+        else (
+            "FAILED"
+            if execution_state in {"FAILED", "CANCELLED"}
+            or (execution_state == "COMPLETED" and c.required)
+            else "OPTIONAL_NOT_REVIEWED"
+            if execution_state == "COMPLETED"
+            else "PENDING"
+        )
+        for c in profile.criteria
+    }

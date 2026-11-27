@@ -1,6 +1,17 @@
 # ThesisHounds
 
-**Advanced Review 27.11.2026:** Lokales Kontextmanagement, strukturierte
+**Post-Audit Remediation 27.11.2026:** Der kontrollierte PDF-Pfad ist mit dem
+bestehenden AssessmentWorkflow und Ollama-Adapter verbunden. **672 Tests, 87,30 %
+Coverage**; positive Modellantworten im Nachweis bleiben simuliert. Der reale
+Pilot wartet weiterhin auf bestätigten PA1-Experimentkatalog, freigegebene
+Modellartefakte und einen tatsächlichen lokalen Lauf. Standard: `INFERENCE_MODE=mock`.
+Keine privaten Uploads oder Hochschulfreigabe. Aktueller Einstieg:
+[Phasenbericht und Roadmap](docs/remediation/2026-11-27-remediation.md) ·
+[G01–G30 Backlog](docs/remediation/2026-11-27-backlog.md) ·
+[Prüfprotokoll](docs/remediation/2026-11-27-verification.md) ·
+[Pilotanleitung](docs/remediation/2026-11-27-pilot-runbook.md).
+
+**Historisch: Advanced Review 27.11.2026:** Lokales Kontextmanagement, strukturierte
 Konsistenz-/Evidenzprüfung, bedarfsgebundene Eskalation, geschützte Provenance und
 versioniertes Befundfeedback sind im bestehenden Reviewpfad integriert.
 **627 Tests, 89,08 % Coverage**; Fairness/Ablation bislang ausschließlich mit Mocks.
@@ -26,7 +37,7 @@ Beispielkriterien. Keine externen Recherche-APIs und keine echten Arbeiten freig
 
 Lokale, datenschutzorientierte Infrastructure Foundation des DHBW-Projekts zur Begutachtung wissenschaftlicher Arbeiten. Version 0.2 erweitert FastAPI, Streamlit und einen gemeinsamen Ollama-Service um einen kontrollierten LangGraph-Workflow mit mehreren Modellen und dynamischen Subagenten.
 
-Die Implementierung führt **synthetische Beispielanalysen** aus. Der unabhängige Bewertungs-MVP ergänzt menschliche Erstbewertung, kriteriumsweise Zweitbewertung, serverseitige Freigaben, Vergleich und menschliche Finalisierung. PA1/PA2/BA verwenden ausdrücklich inoffizielle Beispielprofile. PDF-Parser, produktives RAG und Hochschulauthentifizierung stehen noch aus.
+Der Standard führt **synthetische Beispielanalysen mit Mockantworten** aus. Der unabhängige Bewertungs-MVP ergänzt menschliche Erstbewertung, kriteriumsweise Zweitbewertung, serverseitige Freigaben, Vergleich und menschliche Finalisierung. PA1/PA2/BA verwenden ausdrücklich inoffizielle Beispielprofile. Ein operatorgeprüfter PUBLIC-/synthetischer PDF-Pfad ist ergänzt; privater Upload, produktives RAG und Hochschulauthentifizierung stehen weiterhin aus. Ein echter positiver Modelllauf wurde für diesen Arbeitsstand nicht nachgewiesen.
 
 **Sicherheitsstand 2026-11-26:** Der Standardbetrieb verwendet ausschließlich einen lokalen Mock ohne Netzwerkzugriff. Freie Chattexte und Analyseaufträge sind gesperrt; menschliche Kommentare bleiben RESTRICTED und werden nicht an Modelle weitergegeben. Die KI-Diskussion bleibt bis zur Freigabe gesperrt; ausdrücklich bestätigte menschliche Prüfung ohne Modell bleibt möglich. UNIVERSITY_SECURE und die externen Modi verweigern den Start. Echte Arbeiten bleiben bis zur Infrastruktur-, Rechts- und Organisationsfreigabe gesperrt. [Gap Analysis und Implementierungsplan](docs/security/gap_analysis.md), [Sicherheitsarchitektur](docs/security/privacy_architecture.md), [Tests](docs/security/privacy_test_results.md), [Produktionsblocker](docs/security/production_readiness.md).
 

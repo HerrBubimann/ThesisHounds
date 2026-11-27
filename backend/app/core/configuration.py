@@ -59,6 +59,21 @@ class AgentsConfig(BaseModel):
 
 
 class RuntimeConfig:
+    def bind_local_pilot(self, settings):
+        ids = [settings.pilot_model_id]
+        if settings.pilot_architecture == "E":
+            ids.append(settings.pilot_verifier_model_id)
+        self.models = self.models.require_pilot_artifacts(ids, str(settings.ollama_base_url))
+        self.policy.pilot_models = frozenset(ids)
+        self.policy.pilot_endpoint = str(settings.ollama_base_url).rstrip("/")
+        self.agents.single_model = settings.pilot_model_id
+        self.agents.orchestrator_model = settings.pilot_model_id
+        self.agents.synthesis_model = settings.pilot_model_id
+        self.agents.supervisors = [
+            s.model_copy(update={"model_id": settings.pilot_model_id})
+            for s in self.agents.supervisors
+        ]
+
     @property
     def resource_budget(self) -> ResourceBudget:
         ram, vram = self.limits.inference_ram_limit_gib, self.limits.inference_vram_limit_gib

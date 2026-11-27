@@ -57,49 +57,69 @@ def extract_citations(document) -> dict:
     entries, mentions, warnings = [], [], []
     in_bibliography = False
     for page, text in sorted(document.pages.items()):
-        for match in re.finditer(r"(?m)^.+$", text):
+        pending = None
+
+        def flush(text=text, page=page):
+            nonlocal pending
+            if pending is None:
+                return
+            start, end, _ = pending
+            raw = text[start:end]
+            line = " ".join(raw.split())
+            parsed = re.match(
+                r"(?:\[(?P<number>\d+)\]\s*)?(?P<author>[\wÀ-ž'-]+)"
+                r"(?:,?\s+(?:et al\.\s*)?)\((?P<year>\d{4})\)"
+                r"[.:]?\s*(?P<title>.+?)(?:\.\s*(?:https?://|doi:|10\.)|$)",
+                line,
+            )
+            doi = DOI.search(line)
+            internal = bool(re.search(r"\bintern(?:al|e|es|er)?\b|unternehmensintern", line, re.I))
+            entries.append(
+                BibliographicEntry(
+                    parsed.group("number")
+                    if parsed and parsed.group("number")
+                    else f"p{page}-r{len(entries) + 1}",
+                    page,
+                    start,
+                    end,
+                    raw,
+                    normalize_doi(doi.group()) if doi else None,
+                    parsed.group("author") if parsed else None,
+                    int(parsed.group("year")) if parsed else None,
+                    parsed.group("title").rstrip(". ") if parsed else None,
+                    SourceType.INTERNAL
+                    if internal
+                    else SourceType.PREPRINT
+                    if re.search(r"\b(?:arxiv|preprint)\b", line, re.I)
+                    else SourceType.UNKNOWN,
+                    **scope,
+                )
+            )
+            if not parsed or "\n" in raw or "\r" in raw:
+                warnings.append("UNPARSED_OR_MULTILINE_REFERENCE")
+            pending = None
+
+        for match in re.finditer(r"[^\r\n]+", text):
             line = match.group().strip()
             if re.fullmatch(
                 r"(?:#{1,3}\s*)?(?:Literaturverzeichnis|Quellenverzeichnis|References)", line, re.I
             ):
+                flush()
                 in_bibliography = True
                 continue
             if in_bibliography and re.match(r"^(?:#{1,3}\s*)?(?:Anhang|Appendix)\b", line, re.I):
+                flush()
                 in_bibliography = False
             if in_bibliography and line:
-                # One entry per line; unknown continuations remain manual candidates.
-                parsed = re.match(
-                    r"(?:\[(?P<number>\d+)\]\s*)?(?P<author>[\wÀ-ž'-]+)"
-                    r"(?:,?\s+(?:et al\.\s*)?)\((?P<year>\d{4})\)"
-                    r"[.:]?\s*(?P<title>.+?)(?:\.\s*(?:https?://|doi:|10\.)|$)",
-                    line,
-                )
-                doi = DOI.search(line)
-                internal = bool(
-                    re.search(r"\bintern(?:al|e|es|er)?\b|unternehmensintern", line, re.I)
-                )
-                identifier = parsed.group("number") if parsed else None
-                entries.append(
-                    BibliographicEntry(
-                        identifier or f"p{page}-r{len(entries) + 1}",
-                        page,
-                        match.start(),
-                        match.end(),
-                        line,
-                        normalize_doi(doi.group()) if doi else None,
-                        parsed.group("author") if parsed else None,
-                        int(parsed.group("year")) if parsed else None,
-                        parsed.group("title").rstrip(". ") if parsed else None,
-                        SourceType.INTERNAL
-                        if internal
-                        else SourceType.PREPRINT
-                        if re.search(r"\b(?:arxiv|preprint)\b", line, re.I)
-                        else SourceType.UNKNOWN,
-                        **scope,
-                    )
-                )
-                if not parsed:
-                    warnings.append("UNPARSED_OR_MULTILINE_REFERENCE")
+                indent = len(match.group()) - len(match.group().lstrip())
+                start, end = match.start() + indent, match.start() + len(match.group().rstrip())
+                new_entry = re.match(r"\[\d+\]|[\wÀ-ž'-]+.*\(\d{4}\)", line)
+                # Only a deeper hanging indent is grouped. Ambiguous lines stay separate.
+                if pending and indent > pending[2] and not new_entry:
+                    pending = (pending[0], end, pending[2])
+                else:
+                    flush()
+                    pending = (start, end, indent)
             else:
                 for citation in re.finditer(
                     r"\[(\d+)\]|\(([\wÀ-ž'-]+)(?: et al\.)?,? (\d{4})\)", match.group()
@@ -115,6 +135,7 @@ def extract_citations(document) -> dict:
                             "year": int(citation.group(3)) if citation.group(3) else None,
                         }
                     )
+        flush()
     ids = Counter(e.id for e in entries)
     return {
         **scope,
@@ -125,7 +146,7 @@ def extract_citations(document) -> dict:
                 warnings + (["AMBIGUOUS_REFERENCE_IDS"] if any(n > 1 for n in ids.values()) else [])
             )
         ),
-        "method": "local-single-line-citation-candidates.v1",
+        "method": "local-span-citation-candidates.v2",
         "complete_parser": False,
     }
 

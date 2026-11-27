@@ -22,7 +22,7 @@ class OllamaProvider:
 
     async def request(self, method: str, path: str, *, chat: bool = False, **kwargs: Any) -> dict:
         target = self.client.base_url.join(path)
-        approved_target(target)
+        approved_target(target, self.settings)
         if path == "/api/chat" and (
             not inference_dispatch.get()
             or kwargs.get("json", {}).get("model") != inference_dispatch.get()

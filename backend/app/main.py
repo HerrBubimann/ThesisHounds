@@ -11,10 +11,13 @@ from fastapi.responses import JSONResponse
 from app.api.assessments import router as assessment_router
 from app.api.control import router as control_router
 from app.api.routes import router
+from app.assessments.profile_registry import ProfileRegistry
 from app.config import Settings
 from app.core.runtime import AnalysisRuntime
+from app.llm.model_registry import ModelRegistry
 from app.llm.providers.base import LLMProvider
 from app.llm.providers.demo import DemoProvider
+from app.llm.providers.ollama import OllamaProvider
 from app.models.schemas import ErrorResponse, HealthResponse
 from app.security.access_control import DEMO_PRINCIPAL, current_principal
 from app.security.audit_service import disable_content_logging
@@ -25,8 +28,22 @@ from app.services.llm_service import LLMError, LLMService
 
 
 def create_provider(config: Settings, client: httpx.AsyncClient) -> LLMProvider:
-    # Only supported mode is DEVELOPMENT. No env/UI switch selects a network model.
-    return DemoProvider()
+    if config.inference_mode == "mock":
+        return DemoProvider()
+    # Enabling a mode cannot manufacture artifact or academic approval evidence.
+    models = [config.pilot_model_id]
+    if config.pilot_architecture == "E":
+        models.append(config.pilot_verifier_model_id)
+    registry = ModelRegistry.load(config.config_dir / "models.yaml").require_pilot_artifacts(
+        models, str(config.ollama_base_url)
+    )
+    config.llm_model = registry.get(config.pilot_model_id).name
+    profile = ProfileRegistry(config.config_dir / "assessment_profiles").get(
+        config.pilot_profile_id, "PA1"
+    )
+    if profile.status != "EXPERIMENT" or profile.data_classification != "PUBLIC":
+        raise ValueError("CONFIRMED_PA1_EXPERIMENT_CATALOG_REQUIRED")
+    return OllamaProvider(config, client)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -60,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             follow_redirects=False,
             verify=tls,
             headers=headers,
-            transport=PinnedInferenceTransport(),
+            transport=PinnedInferenceTransport(config, verify=tls),
         ) as client:
             provider = create_provider(config, client)
             runtime = AnalysisRuntime(config, provider, mocked=isinstance(provider, DemoProvider))
@@ -121,7 +138,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ]
             if runtime
             else [],
-            "inference": "IN_PROCESS_MOCK_ONLY",
+            "inference": "LOCAL_OLLAMA_PILOT"
+            if config.inference_mode == "local_pilot"
+            else "IN_PROCESS_MOCK_ONLY",
             "telemetry": "DISABLED",
             **readiness_status(),
         }

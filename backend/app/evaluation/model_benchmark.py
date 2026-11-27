@@ -180,6 +180,10 @@ async def main():
     args = parser.parse_args()
     settings = Settings()
     config = RuntimeConfig(settings.config_dir)
+    if args.provider == "ollama":
+        if settings.inference_mode != "local_pilot":
+            raise SystemExit("REAL_INFERENCE_REQUIRES_CONFIGURED_LOCAL_PILOT")
+        config.bind_local_pilot(settings)
     tls = ssl.create_default_context(
         cafile=str(settings.ollama_ca_file) if settings.ollama_ca_file else None
     )
@@ -194,15 +198,17 @@ async def main():
         headers=headers,
         trust_env=False,
         follow_redirects=False,
-        transport=PinnedInferenceTransport(),
+        transport=PinnedInferenceTransport(settings, verify=tls),
     ) as client:
+        if args.provider == "mock":
+            provider = DemoProvider()
+        else:
+            from app.main import create_provider
+
+            provider = create_provider(settings, client)
         gateway = LLMGateway(
             config.models,
-            {
-                "ollama": DemoProvider()
-                if args.provider == "mock"
-                else OllamaProvider(settings, client)
-            },
+            {"ollama": provider},
             config.policy,
         )
         report = await benchmark(gateway, args.models, args.repeats)

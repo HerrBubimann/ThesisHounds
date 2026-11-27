@@ -25,6 +25,8 @@ class PolicyEngine:
     def __init__(self, config: PolicyConfig) -> None:
         self.config = config
         self.engine = PrivacyPolicyEngine()
+        self.pilot_endpoint: str | None = None
+        self.pilot_models: frozenset[str] = frozenset()
         # EXPERIMENTAL needs an isolated runner without access to this document store.
         if config.mode != "LOCAL_ONLY" or config.experimental_enabled:
             raise ValueError("EXPERIMENTAL requires a separate isolated runner; not enabled here")
@@ -35,7 +37,13 @@ class PolicyEngine:
             model.local
             and model.provider == "ollama"
             and model.deployment_type == "LOCAL"
-            and model.approved_endpoint == "http://ollama:11434"
+            and (
+                model.approved_endpoint == "http://ollama:11434"
+                or (
+                    model.id in self.pilot_models
+                    and model.approved_endpoint.rstrip("/") == self.pilot_endpoint
+                )
+            )
             and model.data_processing_location == "PRIVATE_PROCESSING_ZONE"
             and model.network_access == "APPROVED_INFERENCE_ONLY"
             and not model.telemetry_enabled

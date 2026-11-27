@@ -115,6 +115,26 @@ Sicherheitstests decken ab:
 - **Limits:** Maximale Delegationstiefe, Supervisor- und Subagentenlimits gelten auch über mehrere Supervisoren hinweg. Für die Limits gibt es harte Obergrenzen.
 - **Unkontrollierte Agentenerzeugung:** Ein vollständiger Lauf mit „flutendem“ Mock-Modell bricht ab, ohne das Limit zu überschreiten.
 
+Die Backend- und Frontend-Dockerfiles aktualisieren die Debian-Pakete bereits beim
+Imagebau mit `apt-get update` und `apt-get upgrade`. Damit werden verfügbare
+Sicherheitskorrekturen auch dann installiert, wenn das versionierte Python-Basisimage
+noch ältere OS-Pakete enthält. Die APT-Paketlisten werden in derselben Schicht entfernt.
+
+Anlass am 27.11.2026 war `CVE-2025-6020`: Der übergebene Trivy-Bericht meldete
+in beiden App-Images vier PAM-Pakete in `1.5.2-6+deb12u2`; Debian nennt
+`1.5.2-6+deb12u3` als korrigierte Bookworm-Version
+([Debian Security Tracker](https://security-tracker.debian.org/tracker/CVE-2025-6020)).
+Das ist ein Imagebefund; `ci_summary.py gate` meldet den dadurch fehlgeschlagenen
+Dockerjob korrekt. Scan und Gate bleiben unverändert. Ein neuer Imagebau samt Scan
+ist für den Erfolgsnachweis erforderlich; mit dem alten Commit nur den Gatejob
+zu wiederholen übernimmt keine Dockerfilekorrektur.
+
+Für einen lokalen frischen Neubau, sofern der Docker-Daemon läuft:
+
+```sh
+docker compose build --pull --no-cache backend frontend
+```
+
 ### Ausnahmen
 
 Ausnahmen sind nur einzeln, begründet, befristet und per Review zulässig. Pauschale Ausnahmen für ganze Schweregrade, Pakete oder Images sind verboten.

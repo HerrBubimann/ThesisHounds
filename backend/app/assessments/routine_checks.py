@@ -1,12 +1,10 @@
 """Conservative text-only inventory, not citation existence or PDF layout validation."""
 
-import re
 from collections import Counter
 
+from app.research.doi import DOI, normalize_doi
 from app.security.classification import classify
 from app.services.document_store import Document
-
-DOI = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
 
 
 def inventory(document: Document) -> dict:
@@ -16,7 +14,7 @@ def inventory(document: Document) -> dict:
         "document_id": document.document_id,
     }
     occurrences = [
-        {**scope, "doi_candidate": match.group().rstrip(".,;").lower(), "page": page}
+        {**scope, "doi_candidate": normalize_doi(match.group()), "page": page}
         for page, text in document.pages.items()
         for match in DOI.finditer(text)
     ]

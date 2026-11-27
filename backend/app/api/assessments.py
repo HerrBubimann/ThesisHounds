@@ -14,6 +14,8 @@ from app.assessments.schemas import (
     FindingFeedback,
     HumanReviewSubmission,
 )
+from app.llm.errors import LLMError
+from app.services.document_store import pilot_documents
 from app.workflows.assessment_workflow import AssessmentWorkflow
 
 router = APIRouter(prefix="/api/v1/assessments", tags=["Synthetic assessment MVP"])
@@ -24,6 +26,18 @@ def get_assessments(request: Request) -> AssessmentWorkflow:
 
 
 Dependency = Annotated[AssessmentWorkflow, Depends(get_assessments)]
+
+
+@router.get("/pilot-documents")
+async def registered_documents(service: Dependency):
+    try:
+        return {
+            "documents": pilot_documents(service.settings.pilot_document_dir),
+            "profile_id": service.settings.pilot_profile_id,
+            "inference_mode": service.settings.inference_mode,
+        }
+    except (OSError, ValueError, KeyError, TypeError):
+        raise LLMError(503, "PILOT_CATALOG_UNAVAILABLE_OR_CHANGED") from None
 
 
 @router.get("/profiles")

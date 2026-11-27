@@ -1,5 +1,14 @@
 # Production readiness: BLOCKED
 
+**Remediation 27.11.2026:** Die Produktionssperren bleiben unverändert. Neu ist ein
+begrenzter Operator-PDF-Pfad für synthetische/geprüfte öffentliche Testdaten und
+ein kontrollierter `local_pilot`-Anschluss an den vorhandenen Ollama-Adapter.
+Realer Lauf, Modellartefakte und PA1-Experimentbestätigung fehlen weiterhin.
+Der [aktuelle Phasenbericht](../remediation/2026-11-27-remediation.md) und das
+[Prüfprotokoll](../remediation/2026-11-27-verification.md) grenzen dies ab.
+Die nachfolgenden Tabellen beschreiben die vorangegangene Sicherheitsbasis;
+der begrenzte PUBLIC-Worker ist keine Freigabe privater Parser oder Hochschuldaten.
+
 Das erneute [Hardening vom 27.11.2026](hardening_results.md) hebt diese Sperre nicht
 auf. Insbesondere sind die offenen HIGH-/CRITICAL-Basisimagebefunde zu bewerten;
 ein bestandenes Gate für **behebbare** Befunde ist keine Produktivfreigabe.

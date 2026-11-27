@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from app.research.doi import normalize_doi
 from app.schemas.domain import StrictModel
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class SourceType(StrEnum):
@@ -43,6 +44,11 @@ class MetadataRecord(StrictModel):
     abstract: str | None = Field(default=None, max_length=100_000)
     fulltext: str | None = Field(default=None, max_length=1_000_000)
 
+    @field_validator("doi", mode="before")
+    @classmethod
+    def canonical_identifier(cls, value):
+        return normalize_doi(value)
+
 
 @dataclass(frozen=True)
 class ProviderDefinition:
@@ -65,19 +71,6 @@ PROVIDERS = {
         "arxiv": "https://info.arxiv.org/help/api/",
     }.items()
 }
-
-
-def normalize_doi(value):
-    return (
-        str(value or "")
-        .strip()
-        .casefold()
-        .removeprefix("https://doi.org/")
-        .removeprefix("http://doi.org/")
-        .removeprefix("doi:")
-        .strip()
-        .rstrip(".,;")
-    )
 
 
 def import_metadata(
@@ -158,7 +151,8 @@ def import_metadata(
                 "Correction": "CORRECTED",
                 "Expression of concern": "MANUAL_REVIEW_REQUIRED",
             }.get(entry.get("RetractionNature"), "MANUAL_REVIEW_REQUIRED")
-            for doi in entry.get("OriginalPaperDOI", "").split(";"):
+            # A semicolon may be part of a DOI. Do not guess a multi-ID separator.
+            for doi in [entry.get("OriginalPaperDOI", "")]:
                 if normalize_doi(doi):
                     result.append(
                         MetadataRecord(

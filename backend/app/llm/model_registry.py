@@ -110,3 +110,28 @@ class ModelRegistry:
 
     def enabled(self) -> list[ModelDefinition]:
         return [model for model in self.models.values() if model.enabled]
+
+    def require_pilot_artifacts(self, model_ids: list[str], endpoint: str) -> "ModelRegistry":
+        models = [self.get(key) for key in model_ids]
+        for model in models:
+            if not (
+                model.local
+                and model.provider == "ollama"
+                and model.deployment_type == "LOCAL"
+                and model.approved_endpoint.rstrip("/") == endpoint.rstrip("/")
+                and model.approval_status
+                == model.license_status
+                == model.security_review_status
+                == "APPROVED"
+                and model.version
+                and model.expected_digest
+                and model.weights_origin
+                and model.allowed_classifications == ["PUBLIC"]
+                and not model.telemetry_enabled
+                and not model.cloud_features_enabled
+                and {"chat", "structured_output"} <= set(model.capabilities)
+            ):
+                raise ValueError("PILOT_MODEL_ARTIFACT_APPROVAL_REQUIRED")
+        if len(models) > 1 and len({m.manufacturer for m in models}) != len(models):
+            raise ValueError("PILOT_VERIFIER_MANUFACTURER_MUST_DIFFER")
+        return ModelRegistry(models)

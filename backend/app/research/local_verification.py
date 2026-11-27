@@ -5,6 +5,7 @@ from typing import Literal
 
 from app.assessments.routine_checks import inventory
 from app.research.citation_validator import ResearchEvidence
+from app.research.doi import normalize_doi
 from app.schemas.domain import StrictModel
 from app.services.document_intelligence import structure_document
 from pydantic import Field, model_validator
@@ -31,10 +32,6 @@ class CitationAssertion(StrictModel):
     page: int = Field(ge=1)
     quote: str = Field(default="", max_length=2000)
     cited_version: str | None = None
-
-
-def normalize_doi(value: str) -> str:
-    return value.strip().casefold().removeprefix("https://doi.org/").removeprefix("doi:").strip()
 
 
 def verify_local_sources(

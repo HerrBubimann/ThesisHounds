@@ -1,5 +1,36 @@
 # Requirements traceability and engineering gap analysis
 
+## Post-Audit Remediation, 27.11.2026
+
+Maßgeblicher neuer Arbeitsstand: [Phasenbericht und Abnahmegrenzen](../remediation/2026-11-27-remediation.md),
+[alle G01–G30 mit Abnahmekriterien](../remediation/2026-11-27-backlog.md),
+[tatsächlich ausgeführte Prüfungen](../remediation/2026-11-27-verification.md) und
+[Pilotanleitung](../remediation/2026-11-27-pilot-runbook.md).
+Die fünf Auditdateien bleiben historische Ausgangsbelege. Die folgenden Abschnitte
+zu früheren Erweiterungen sind weiterhin deren jeweilige historische Nachweise.
+Die originale DHBW-Projekt-PowerPoint und primäres Professorenfeedback fehlen;
+OFF-1 bis OFF-5 bleiben rekonstruierte Anforderungen. Der Nutzer bestätigt weiterhin
+fehlenden PA1-Experimentkatalog und fehlende freigegebene Modellartefakte.
+
+| OFF / Gap | Konkreter neuer Implementierungsumfang | Dateipfad | Testreferenz | Ausführungsnachweis / Klassifikation und Grenze |
+|---|---|---|---|---|
+| OFF-1 / G01,G04 | Katalogzustände EXAMPLE/CANDIDATE/EXPERIMENT/APPROVED getrennt; keine neue Fachfreigabe | `backend/app/assessments/profile_registry.py`, `config/assessment_profiles/pa1.yaml` | `tests/integration/test_pilot_workflow.py::test_local_pilot_needs_actual_artifact_and_catalog_evidence` | `junit-final.xml`; technische Prüfung IMPLEMENTED_AND_TESTED, bestätigter Katalog BLOCKED_BY_EXTERNAL_REQUIREMENTS |
+| OFF-2/3 / G02,G04 | Expliziter `local_pilot` im vorhandenen OllamaProvider/Gateway, geschlossene Registry und kein Demo-/Cloudfallback | `backend/app/main.py`, `backend/app/config.py`, `backend/app/llm/model_registry.py`, `backend/app/core/configuration.py`, `backend/app/security/policy_engine.py` | `tests/integration/test_pilot_workflow.py::test_pdf_to_human_finalization_through_real_adapter_with_mock_http`, `tests/security/test_pilot_boundaries.py::test_unapproved_or_unpinned_artifact_cannot_create_network_provider` | Softwareintegration IMPLEMENTED_AND_TESTED mit simuliertem HTTP; echte Inferenz IMPLEMENTED_NOT_VERIFIED |
+| OFF-2/5 / G08 | Hochschultransport mit exaktem HTTPS-Host/Port, privaten Pins, TLS-CA/SNI und DNS-Rebinding-Deny | `backend/app/security/egress_policy.py`, `backend/app/llm/providers/ollama.py`, `backend/app/main.py` | `tests/unit/test_audit_regressions.py::test_g08_explicit_https_pin_preserves_tls_hostname_and_denies_dns_rebinding`, negative Pin-/TLSfälle | `phase1-before.xml`, `phase1-after.xml`, `junit-final.xml`; kontrollierter Transport IMPLEMENTED_AND_TESTED, Hochschulbetrieb weiterhin PARTIALLY_IMPLEMENTED/extern blockiert |
+| OFF-2/3/4 / G03,G19 | Kuratierte PDF → begrenzter Parserprozess → gehashter Katalog → Assessment → Originalbeleg | `backend/app/services/document_store.py`, `backend/app/services/pdf_worker.py`, `backend/app/assessments/schemas.py`, `backend/app/api/assessments.py`, `backend/app/workflows/assessment_workflow.py` | `tests/integration/test_pilot_workflow.py`, `tests/security/test_pilot_boundaries.py` | `junit-final.xml`, `corpus-cli.json`; synthetischer Dokumentpfad IMPLEMENTED_AND_TESTED, private Sandbox/Upload NOT_IMPLEMENTED |
+| OFF-3/4/5 / G15 | Originaloffsets einschließlich eingerückter Mehrzeileneinträge | `backend/app/research/citations.py` | `tests/unit/test_audit_regressions.py::test_g15_original_spans_for_indented_and_multiline_references` | rot vor Korrektur, grün final; IMPLEMENTED_AND_TESTED für exakte Textspannen, keine umfassende Extraktionsgüte |
+| OFF-3/5 / G16 | Eine DOI-Normalisierung; mehrdeutige legitime Suffixzeichen bleiben | `backend/app/research/doi.py`, `backend/app/research/provider_registry.py`, `backend/app/research/local_verification.py`, `backend/app/assessments/routine_checks.py` | `tests/unit/test_audit_regressions.py::test_g16_one_canonical_doi_function_preserves_ambiguous_suffixes`, Retraction-Semikolonfall | rot vor Korrektur, grün final; IMPLEMENTED_AND_TESTED für geprüfte Eingaben |
+| OFF-3/4/5 / G17 | Fehlendes optionales KI-Kriterium ohne KeyError, getrennte Bearbeitungszustände, Pflichtgate bleibt | `backend/app/assessments/coverage.py`, `backend/app/workflows/assessment_workflow.py`, `frontend/assessment_review.py` | `tests/unit/test_audit_regressions.py::test_g17_missing_optional_finding_can_be_compared_and_finalized`, `test_g17_execution_states_and_required_coverage_are_distinct` | `g17-before.xml` reproduziert KeyError, final grün; IMPLEMENTED_AND_TESTED |
+| OFF-4 / G03,G10 | Pilotdateiauswahl, unabhängiger Humanreview, Embargo, Belege, manuelle Klärung und Finale | `frontend/assessment_review.py`, `backend/app/workflows/assessment_workflow.py` | `tests/integration/test_pilot_workflow.py::test_pilot_pdf_can_be_selected_in_ui_with_explicit_inference_mode`, kompletter PDF-/Adaptertest, bestehende `tests/integration/test_assessment_frontend.py` | `ui-pilot.xml`, `junit-final.xml`; IMPLEMENTED_AND_TESTED mit synthetischen Daten/Mockantworten, freie KI-Diskussion bleibt gesperrt |
+| OFF-2/4/5 / G06,G22 | Dokument-/Text-/Kriterien-/Architekturbindung und expliziter flüchtiger Ergebnisvertrag | `backend/app/assessments/provenance.py`, `backend/app/workflows/assessment_workflow.py`, `docs/remediation/2026-11-27-pilot-runbook.md` | `tests/integration/test_pilot_workflow.py::test_pilot_abort_delete_and_restart_explicitly_have_no_recovery`, `tests/integration/test_finding_feedback.py` | `junit-final.xml`; Lifecycle/Verlust beim Neustart IMPLEMENTED_AND_TESTED, Persistenz/Restore/integrer Akteuraudit NOT_IMPLEMENTED |
+| OFF-3/5 / G07,G26,G27 | Fünf analysierbare PDFs plus geheime Deny-Kontrolle; gleicher A/E-Input; dokumentweise Konsistenz und Referenzzuordnung | `backend/app/evaluation/academic_benchmark.py`, `backend/app/evaluation/lab.py`, `backend/app/evaluation/metrics.py` | `tests/integration/test_pilot_evaluation.py::test_generated_pdf_corpus_runs_a_and_e_without_cross_document_repeat_comparisons`, unregistrierter Korpus wird abgewiesen | 20 Mock-Reviews im Integrationstest; IMPLEMENTED_AND_TESTED für Software; Referenzgüte BLOCKED_BY_EXTERNAL_REQUIREMENTS |
+| OFF-2/5 / G09,G20,G23,G24 | Bestehende Prüfgrenzen und Tests erhalten; neue Positiv-/Negativfälle | `pyproject.toml`, `.github/workflows/ci.yml` (beide unverändert), neue Pilot-/Auditregressionen | gesamtes `tests/` | 672 Fälle, 87,30 %, Ruff/Bandit/pip-audit/statische Compose-Prüfung; lokale Softwarechecks IMPLEMENTED_AND_TESTED, neue Docker-/Remote-/Hardwareabnahme IMPLEMENTED_NOT_VERIFIED |
+
+Alle relativen Belegdateinamen in der letzten Spalte liegen unter dem ignorierten
+`reports/remediation-2026-11-27/`. Sie werden nicht mit echten Gutachterdaten
+veröffentlicht. OFF-5 ist trotz Softwaretests fachlich weiterhin teilweise erfüllt;
+kein höherer Testzähler begründet einen wissenschaftlichen Qualitätsgewinn.
+
 ## Advanced Review, 27.11.2026
 
 Der [Audit](../architecture/advanced_review_audit.md) priorisiert bestehende Komponenten.

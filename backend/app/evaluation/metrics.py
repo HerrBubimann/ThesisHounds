@@ -96,17 +96,25 @@ def quality_metrics(
 def consistency(rows: list[dict]) -> list[dict]:
     results = []
     groups = {
-        (r["architecture"], r["variation"], r.get("ablation", "baseline"))
+        (
+            r["architecture"],
+            r["variation"],
+            r.get("ablation", "baseline"),
+            r.get("dataset_sha256", "UNKNOWN"),
+            r.get("profile_sha256", "UNKNOWN"),
+        )
         for r in rows
         if r["status"] == "COMPLETED"
     }
-    for architecture, variation, ablation in sorted(groups):
+    for architecture, variation, ablation, dataset_hash, profile_hash in sorted(groups):
         selected = [
             r
             for r in rows
             if (r["architecture"], r["variation"], r["status"])
             == (architecture, variation, "COMPLETED")
             and r.get("ablation", "baseline") == ablation
+            and r.get("dataset_sha256", "UNKNOWN") == dataset_hash
+            and r.get("profile_sha256", "UNKNOWN") == profile_hash
         ]
         pairs = []
         for first, second in combinations(selected, 2):
@@ -129,6 +137,8 @@ def consistency(rows: list[dict]) -> list[dict]:
         results.append(
             {
                 "architecture": architecture,
+                "dataset_sha256": dataset_hash,
+                "profile_sha256": profile_hash,
                 "variation": variation,
                 "ablation": ablation,
                 "comparisons": pairs,
@@ -148,6 +158,7 @@ def variation_comparisons(rows: list[dict]) -> list[dict]:
                 b
                 for b in rows
                 if b["architecture"] == row["architecture"]
+                and b.get("document_id") == row.get("document_id")
                 and b["variation"] == "baseline"
                 and b["repeat"] == row["repeat"]
                 and b["status"] == "COMPLETED"
@@ -221,6 +232,7 @@ def ablation_comparisons(rows):
                     b["status"],
                 )
                 == (row["architecture"], row["variation"], row["repeat"], "baseline", "COMPLETED")
+                and b.get("document_id") == row.get("document_id")
             ),
             None,
         )

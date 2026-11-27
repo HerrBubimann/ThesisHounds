@@ -16,8 +16,15 @@ class Settings(BaseSettings):
 
     deployment_mode: Literal["local", "university"] = "local"
     security_mode: SecurityMode = SecurityMode.DEVELOPMENT
+    inference_mode: Literal["mock", "local_pilot"] = "mock"
+    pilot_model_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$")
+    pilot_verifier_model_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$")
+    pilot_architecture: Literal["A", "E"] = "A"
+    pilot_profile_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$")
+    pilot_document_dir: Path | None = None
     ollama_base_url: HttpUrl = HttpUrl("http://ollama:11434")
     university_ollama_hosts: list[str] = Field(default_factory=list)
+    university_ollama_ips: list[str] = Field(default_factory=list)
     ollama_ca_file: Path | None = None
     ollama_auth_token: SecretStr | None = None
     enable_public_research: bool = False
@@ -86,6 +93,18 @@ class Settings(BaseSettings):
             source_root
         ):
             raise ValueError("Metadata snapshots must be outside the source repository.")
+        if self.pilot_document_dir and self.pilot_document_dir.resolve().is_relative_to(
+            source_root
+        ):
+            raise ValueError("Pilot documents must be outside the source repository.")
+        if self.inference_mode == "local_pilot" and (
+            self.deployment_mode != "local"
+            or not self.pilot_model_id
+            or not self.pilot_profile_id
+            or self.pilot_document_dir is None
+            or (self.pilot_architecture == "E" and not self.pilot_verifier_model_id)
+        ):
+            raise ValueError("LOCAL_PILOT_REQUIRES_MODEL_PROFILE_DOCUMENTS_AND_LOCAL_BOUNDARY")
         # These switches cannot activate unfinished or unapproved egress/scoring paths.
         if self.enable_public_research or self.enable_ai_scoring:
             raise ValueError("Public research and AI scoring are not released in this MVP.")

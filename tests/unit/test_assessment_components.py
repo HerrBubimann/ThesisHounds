@@ -31,7 +31,8 @@ def test_doi_inventory_does_not_claim_citation_verification():
             },
         )
     )
-    assert result["repeated_doi_mentions"] == {"10.1234/example": 2}
+    # A terminal dot may be part of the DOI; candidates preserve it until reviewed.
+    assert result["repeated_doi_mentions"] == {"10.1234/example.": 2}
     assert result["verification"] == "UNVERIFIED"
 
 

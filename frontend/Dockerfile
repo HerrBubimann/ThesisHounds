@@ -1,5 +1,11 @@
 FROM python:3.12.16-slim-bookworm
 
+# Apply available Debian security fixes before installing application dependencies.
+# The base image includes PAM packages affected by CVE-2025-6020 before deb12u3.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \

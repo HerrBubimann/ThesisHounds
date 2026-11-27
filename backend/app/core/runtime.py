@@ -24,6 +24,8 @@ class AnalysisRuntime:
 
     def __init__(self, settings: Settings, provider: LLMProvider, *, mocked: bool = False):
         self.config = RuntimeConfig(settings.config_dir)
+        if settings.inference_mode == "local_pilot":
+            self.config.bind_local_pilot(settings)
         self.provider, self.mocked = provider, mocked
         limits = self.config.limits
         self.gateway = LLMGateway(
@@ -80,6 +82,8 @@ class AnalysisRuntime:
                 self.access.remove(run.run_id)
 
     def start(self, request: RunRequest) -> RunRecord:
+        if self.assessments.settings.inference_mode == "local_pilot":
+            raise LLMError(403, "LOCAL_PILOT_USES_ASSESSMENT_WORKFLOW_ONLY")
         defaults = RunRequest()
         if request.task != defaults.task or request.criteria != defaults.criteria:
             raise LLMError(403, "Freie Aufgaben und Kriterien sind im Entwicklungsmodus gesperrt.")

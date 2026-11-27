@@ -10,16 +10,30 @@ BASE = "/api/v1/assessments"
 
 
 def render_assessment_review():
-    st.subheader("Unabhängige Begutachtung · Synthetischer MVP")
+    st.subheader("Unabhängige Begutachtung")
     st.caption(
         "Beispielprofile, keine offiziellen DHBW-Kriterien. Keine echten Arbeiten hochladen."
     )
     try:
         if "assessment_id" not in st.session_state:
-            work_type = st.selectbox("Arbeitstyp", ["PA1", "PA2", "BA"])
+            if st.button("Kontrollierte Pilotdatei auswählen"):
+                st.session_state.pilot_catalog = request_backend("GET", BASE + "/pilot-documents")
+                st.rerun()
+            pilot = st.session_state.get("pilot_catalog", {})
+            selected_document = "synthetic-demo"
+            if pilot:
+                documents = pilot.get("documents", [])
+                if not documents or not pilot.get("profile_id"):
+                    st.info("Geprüfte Pilotdateien oder bestätigter Experimentkatalog fehlen.")
+                    return
+                selected_document = st.selectbox(
+                    "Geprüfte Test-PDF", [d["document_id"] for d in documents]
+                )
+                st.caption("Operatorgeprüfte Datei; keine Freigabe vertraulicher Arbeiten.")
+            work_type = st.selectbox("Arbeitstyp", ["PA1"] if pilot else ["PA1", "PA2", "BA"])
             program = st.selectbox(
                 "Studiengang",
-                ["data_science_ai", "wirtschaftsinformatik"],
+                ["data_science_ai"] if pilot else ["data_science_ai", "wirtschaftsinformatik"],
                 format_func=lambda value: (
                     "Data Science und KI" if value == "data_science_ai" else "Wirtschaftsinformatik"
                 ),
@@ -31,13 +45,18 @@ def render_assessment_review():
                 else ["WI23", "WI24", "WI25"],
                 index=None,
             )
-            if st.button("Synthetische Begutachtung anlegen"):
+            if st.button(
+                "Pilotbegutachtung anlegen" if pilot else "Synthetische Begutachtung anlegen"
+            ):
                 record = request_backend(
                     "POST",
                     BASE,
                     json={
                         "work_type": work_type,
-                        "profile_id": work_type.lower() + "-example",
+                        "profile_id": pilot["profile_id"]
+                        if pilot
+                        else work_type.lower() + "-example",
+                        "document_id": selected_document,
                         "program": program,
                         "cohort": cohort,
                     },
@@ -47,6 +66,8 @@ def render_assessment_review():
             return
         path = f"{BASE}/{st.session_state.assessment_id}"
         record = request_backend("GET", path)
+        pilot_document = record.get("document_id", "synthetic-demo") != "synthetic-demo"
+        real_mode = record.get("security", {}).get("inference") == "LOCAL_OLLAMA_PILOT"
         st.caption(f"{record['state']} · Infrastruktur: {record['deployment_mode']}")
         st.caption(
             f"Schutzklasse: {record.get('classification', 'RESTRICTED')} · "
@@ -55,12 +76,20 @@ def render_assessment_review():
         )
         st.caption(
             f"Dokument: {record.get('document_classification', 'PUBLIC')} "
-            "(servereigene synthetische Fixture)"
+            + (
+                "(operatorgeprüfte Pilot-PDF)"
+                if pilot_document
+                else "(servereigene synthetische Fixture)"
+            )
         )
         st.write("Öffentliche Recherche: deaktiviert · KI-Punktevergabe: deaktiviert")
         security = record.get("security", {})
         st.caption(
-            "Autorisierte Mock-Modellkennungen: "
+            (
+                "Autorisierte lokale Modellkennungen: "
+                if real_mode
+                else "Autorisierte Mock-Modellkennungen: "
+            )
             + ", ".join(security.get("authorized_demo_models", []))
         )
         st.caption(
@@ -70,13 +99,22 @@ def render_assessment_review():
         )
         if record.get("cohort"):
             render_rules(record.get("institutional_rules", {}))
-        with st.expander("Synthetisches Testdokument lesen"):
+        st.caption(
+            "Inferenzmodus: Lokaler Ollama-Pilot; Laufstatus separat prüfen."
+            if real_mode
+            else "Inferenzmodus: Mock; keine reale Modellinferenz."
+        )
+        with st.expander(
+            "Pilot-PDF lesen" if pilot_document else "Synthetisches Testdokument lesen"
+        ):
             document = request_backend("GET", path + "/document")
             for page, text in document["pages"].items():
                 st.text(f"Seite {page}: {text}")
         if st.button("Begutachtungsstatus aktualisieren"):
             st.rerun()
-        if st.button("Weitere synthetische Begutachtung"):
+        if st.button(
+            "Weitere Pilotbegutachtung" if pilot_document else "Weitere synthetische Begutachtung"
+        ):
             del st.session_state.assessment_id
             st.session_state.pop("evidence_finding", None)
             st.rerun()
@@ -171,7 +209,8 @@ def render_comparison(path, record):
             left.text(json.dumps(row["human"], ensure_ascii=False, indent=2))
             right.write("Unabhängige KI-Zweitbewertung")
             right.text(json.dumps(row["ai"], ensure_ascii=False, indent=2))
-            for finding in [row["ai"], *row["ai"].get("supplemental", [])]:
+            value = row.get("ai")
+            for finding in [value, *value.get("supplemental", [])] if value else []:
                 if finding.get("conflict"):
                     st.warning("Ungeklärter Gegenbefund: fachliche Prüfung erforderlich.")
                 if st.button("Textbeleg öffnen", key="evidence_" + finding["finding_id"]):
@@ -235,7 +274,9 @@ def render_comparison(path, record):
             criterion = st.selectbox("Menschliche Entscheidung für", ids)
             include = st.selectbox("KI-Befund übernehmen?", ["Ja", "Nein"], index=None)
             extras = [
-                f for row in comparison["criteria"] for f in row["ai"].get("supplemental", [])
+                f
+                for row in comparison["criteria"]
+                for f in (row.get("ai") or {}).get("supplemental", [])
             ]
             selected_extras = st.multiselect(
                 "Zusätzliche Befunde des gewählten Kriteriums übernehmen",
@@ -283,8 +324,12 @@ def render_finding_feedback(path, comparison, *, writable):
         findings = [
             f
             for row in comparison["criteria"]
+            if row.get("ai")
             for f in [row["ai"], *row["ai"].get("supplemental", [])]
         ]
+        if not findings:
+            st.info("Keine KI-Befunde für Feedback vorhanden.")
+            return
         with st.form("finding_feedback"):
             finding_id = st.selectbox(
                 "Befund",

@@ -10,7 +10,9 @@ Judgment = Literal["POSITIVE", "MIXED", "NEGATIVE", "NOT_ASSESSABLE"]
 class AssessmentRequest(StrictModel):
     work_type: Literal["PA1", "PA2", "BA"]
     profile_id: str = Field(min_length=1, max_length=40)
-    document_id: Literal["synthetic-demo"] = "synthetic-demo"
+    document_id: str = Field(
+        default="synthetic-demo", pattern=r"^(synthetic-demo|pilot-[0-9a-f]{64})$"
+    )
     program: Literal["data_science_ai", "wirtschaftsinformatik"] = "data_science_ai"
     cohort: str | None = Field(default=None, pattern=r"^(DS|WI)[0-9]{2}$")
 

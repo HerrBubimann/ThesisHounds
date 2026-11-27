@@ -10,7 +10,7 @@ from uuid import uuid4
 from app.agents.academic_review import AcademicReviewServices
 from app.assessments.ai_review import AISecondReviewer
 from app.assessments.comparison import compare
-from app.assessments.coverage import check_coverage
+from app.assessments.coverage import check_coverage, criterion_states
 from app.assessments.profile_registry import AssessmentProfile, ProfileRegistry
 from app.assessments.provenance import content_digest, snapshot
 from app.assessments.routine_checks import inventory
@@ -38,7 +38,7 @@ from app.security.classification import Classification, combine
 from app.security.information_flow import InformationLabel
 from app.security.injection_detection import detect_injection
 from app.services.document_intelligence import structure_document
-from app.services.document_store import SYNTHETIC_PAGES, Document
+from app.services.document_store import SYNTHETIC_PAGES, Document, load_pilot_document
 
 
 @dataclass
@@ -65,6 +65,7 @@ class Assessment:
     finding_feedback: list[dict] = field(default_factory=list)
     provenance_snapshot: dict = field(default_factory=dict)
     research_manifest: list[dict] = field(default_factory=list)
+    architecture: str = "E"
 
 
 class AssessmentWorkflow:
@@ -96,7 +97,15 @@ class AssessmentWorkflow:
         self.cleanup()
         if assessment_id not in self.records:
             raise LLMError(404, "Begutachtung nicht gefunden oder bereits bereinigt.")
-        return self.records[assessment_id]
+        record = self.records[assessment_id]
+        if record.provenance_snapshot.get("source_pdf_sha256") and (
+            content_digest(record.document.pages)
+            != record.provenance_snapshot["document_version_sha256"]
+            or record.document.source_sha256 != record.provenance_snapshot["source_pdf_sha256"]
+            or record.document.document_id != record.provenance_snapshot["document_id"]
+        ):
+            raise LLMError(409, "DOCUMENT_VERSION_CHANGED")
+        return record
 
     @staticmethod
     def event(record: Assessment, action: str):
@@ -121,8 +130,37 @@ class AssessmentWorkflow:
             raise LLMError(422, "Jahrgang passt nicht zum Studiengang.")
         # An example may only be used with server-owned synthetic data.
         assessment_id = str(uuid4())
+        document = Document(
+            document_id="synthetic-demo",
+            analysis_id=assessment_id,
+            classification="PUBLIC",
+            pages=dict(SYNTHETIC_PAGES),
+            complete=True,
+        )
+        if self.settings.inference_mode == "local_pilot" and (
+            request.profile_id != self.settings.pilot_profile_id
+            or request.document_id == "synthetic-demo"
+        ):
+            raise LLMError(403, "LOCAL_PILOT_REQUIRES_REGISTERED_DOCUMENT_AND_CONFIRMED_CATALOG")
+        if request.document_id != "synthetic-demo":
+            if not (
+                self.settings.pilot_document_dir
+                and request.work_type == "PA1"
+                and request.program == "data_science_ai"
+                and profile.status == "EXPERIMENT"
+            ):
+                raise LLMError(403, "CONTROLLED_PA1_PILOT_NOT_CONFIGURED")
+            try:
+                document = load_pilot_document(
+                    self.settings.pilot_document_dir, request.document_id, assessment_id
+                )
+            except (OSError, ValueError, KeyError, TypeError):
+                raise LLMError(403, "PILOT_DOCUMENT_NOT_REGISTERED_OR_CHANGED") from None
         record = Assessment(
             id=assessment_id,
+            architecture=self.settings.pilot_architecture
+            if self.settings.inference_mode == "local_pilot"
+            else "E",
             profile=profile,
             program=request.program,
             cohort=request.cohort,
@@ -131,13 +169,7 @@ class AssessmentWorkflow:
             ),
             classification=combine("PUBLIC", profile.data_classification),
             budget=CallBudget(self.config.limits.max_model_calls, self.config.limits.max_tokens),
-            document=Document(
-                document_id="synthetic-demo",
-                analysis_id=assessment_id,
-                classification="PUBLIC",
-                pages=dict(SYNTHETIC_PAGES),
-                complete=True,
-            ),
+            document=document,
         )
         self.access.create(record.id)
         record.provenance_snapshot = snapshot(record, self.config)
@@ -168,7 +200,20 @@ class AssessmentWorkflow:
             "state": state,
             "work_type": record.profile.work_type,
             "profile": record.profile.model_dump(),
-            "document_id": "synthetic-demo",
+            "document_id": record.document.document_id,
+            "document_version": record.provenance_snapshot.get("document_version_sha256"),
+            "source_sha256": record.document.source_sha256,
+            "architecture": record.architecture,
+            "criterion_execution": criterion_states(record.profile, record.ai, record.ai_state)
+            if record.ai_released
+            else {
+                c.id: "FAILED"
+                if record.ai_state in {"FAILED", "CANCELLED"}
+                else "COMPLETED_EMBARGOED"
+                if record.ai_state == "COMPLETED"
+                else "PENDING"
+                for c in record.profile.criteria
+            },
             "human_completed": record.human is not None,
             "ai_state": record.ai_state,
             "ai_released": record.ai_released,
@@ -191,8 +236,12 @@ class AssessmentWorkflow:
             "institutional_rules": record.institutional_rules,
             "security": {
                 "mode": self.settings.security_mode.value,
-                "inference": "IN_PROCESS_MOCK_ONLY",
-                "endpoint": "in-process://demo",
+                "inference": "LOCAL_OLLAMA_PILOT"
+                if self.settings.inference_mode == "local_pilot"
+                else "IN_PROCESS_MOCK_ONLY",
+                "endpoint": str(self.settings.ollama_base_url)
+                if self.settings.inference_mode == "local_pilot"
+                else "in-process://demo",
                 "authorized_demo_models": [m.id for m in self.config.models.enabled()],
                 "external_research": "DISABLED",
                 "local_research": "PUBLIC_SNAPSHOTS_ONLY",
@@ -203,11 +252,13 @@ class AssessmentWorkflow:
     def academic_checks(self, assessment_id: str) -> dict:
         record = self.released(assessment_id)
         result = self.academic.check(record.document, record.institutional_rules)
-        record.research_manifest = [
+        manifest = [
             {**check, "checked_at": now().isoformat(), "entry_id": row["entry"]["id"]}
             for row in result["citations"]["references"]
             for check in row["checks"]
         ]
+        if record.terminal != "FINALIZED":
+            record.research_manifest = manifest
         # Combining with human review metadata raises classification; no model call follows.
         result["classification"] = record.classification
         result["decisions"] = list(record.academic_decisions)
@@ -280,6 +331,7 @@ class AssessmentWorkflow:
                     record.document.model_copy(deep=True),
                     record.profile.model_copy(deep=True),
                     record.budget,
+                    architecture=record.architecture,
                 )
             if not check_coverage(record.profile, result).complete:
                 raise ValueError("Incomplete criterion coverage")
@@ -300,6 +352,8 @@ class AssessmentWorkflow:
         self.writable(record)
         if not record.human or record.ai_state != "COMPLETED" or record.ai_released:
             raise LLMError(409, "Beide Erstbewertungen müssen abgeschlossen sein.")
+        if not check_coverage(record.profile, record.ai).complete:
+            raise LLMError(409, "Pflichtkriterien fehlen oder sind mehrdeutig.")
         record.ai_released = True
         self.event(record, "AI_RELEASED_FOR_HUMAN_VALIDATION")
         return self.status(assessment_id)
@@ -314,13 +368,15 @@ class AssessmentWorkflow:
         record = self.released(assessment_id)
         human = {c.criterion_id: c for c in record.human.criteria}
         ai = {f.criterion_id: f for f in record.ai}
+        states = criterion_states(record.profile, record.ai, record.ai_state)
         return {
             "criteria": [
                 {
                     "criterion_id": c.id,
-                    "status": compare(human[c.id], ai[c.id]),
+                    "status": compare(human[c.id], ai[c.id]) if c.id in ai else states[c.id],
+                    "ai_state": states[c.id],
                     "human": human[c.id].model_dump(),
-                    "ai": self.finding_view(record, ai[c.id]),
+                    "ai": self.finding_view(record, ai[c.id]) if c.id in ai else None,
                 }
                 for c in record.profile.criteria
             ],
@@ -471,6 +527,9 @@ class AssessmentWorkflow:
             "source_end": end,
             "extraction_warnings": structure.warnings,
             "classification": record.classification,
+            "document_id": record.document.document_id,
+            "document_version": record.provenance_snapshot["document_version_sha256"],
+            "source_sha256": record.document.source_sha256,
         }
 
     async def discuss(self, assessment_id: str, request: DiscussionRequest) -> dict:
@@ -566,8 +625,10 @@ class AssessmentWorkflow:
             raise LLMError(409, "Zunächst die Bewertungen diskutieren.")
         if len(record.decisions) >= 60:
             raise LLMError(429, "Versionslimit erreicht.")
-        primary = next(f for f in record.ai if f.criterion_id == decision.criterion_id)
-        available = {f.finding_id for f in [primary, *primary.supplemental]}
+        primary = next((f for f in record.ai if f.criterion_id == decision.criterion_id), None)
+        available = {f.finding_id for f in [primary, *primary.supplemental]} if primary else set()
+        if decision.include_ai_finding and primary is None:
+            raise LLMError(422, "Kein KI-Befund für dieses optionale Kriterium vorhanden.")
         if not set(decision.include_finding_ids) <= available:
             raise LLMError(422, "Freigabe enthält fremde oder unbekannte Befunde.")
         selected = set(decision.include_finding_ids)
@@ -604,12 +665,14 @@ class AssessmentWorkflow:
         # Deterministic synthesis prevents new LLM criticism appearing at finalization.
         parts = []
         for c in record.profile.criteria:
-            decision, finding = decisions[c.id], findings[c.id]
+            decision, finding = decisions[c.id], findings.get(c.id)
             text = f"{c.id}: {decision['conclusion']}\nBegründung: {decision['rationale']}"
             selected = set(decision.get("include_finding_ids", []))
             if decision["include_ai_finding"]:
                 selected.add(finding.finding_id)
-            for value in [finding, *finding.supplemental]:
+            if finding is None:
+                text += "\nOptionales Kriterium ohne KI-Bearbeitung; menschliche Entscheidung."
+            for value in [finding, *finding.supplemental] if finding else []:
                 if value.finding_id in selected:
                     feedback = [
                         e for e in record.finding_feedback if e["finding_id"] == value.finding_id

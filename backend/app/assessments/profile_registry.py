@@ -26,7 +26,7 @@ class AssessmentProfile(StrictModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,39}$")
     work_type: Literal["PA1", "PA2", "BA"]
     version: str = Field(min_length=1, max_length=40)
-    status: Literal["EXAMPLE", "CANDIDATE", "APPROVED"] = "CANDIDATE"
+    status: Literal["EXAMPLE", "CANDIDATE", "EXPERIMENT", "APPROVED"] = "CANDIDATE"
     source: str = Field(min_length=1, max_length=300)
     approved_by: str = Field(default="", max_length=100)
     approved_at: str = Field(default="", max_length=40)
@@ -47,7 +47,9 @@ class AssessmentProfile(StrictModel):
     def validate_catalog(self):
         if len({c.id for c in self.criteria}) != len(self.criteria):
             raise ValueError("Duplicate criterion IDs")
-        if self.status == "APPROVED" and not (self.approved_by and self.approved_at):
+        if self.status in {"APPROVED", "EXPERIMENT"} and not (
+            self.approved_by and self.approved_at
+        ):
             raise ValueError("Official rubrics require explicit human approval")
         return self
 
