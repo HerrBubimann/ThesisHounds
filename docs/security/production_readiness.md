@@ -1,5 +1,12 @@
 # Production readiness: BLOCKED
 
+**Document Security, 27.11.2026:** zusätzliche PDF-Preflight-/Ressourcenprüfungen,
+Python-Audithook, Tool-/Modell-/Actorscope und menschliche Verdachtsprüfung sind
+lokal getestet. [737 Tests / tatsächliche Grenzen](../evaluation/security_results.md).
+Diese Maßnahmen ersetzen weder OS-Sandbox-/Zielhostabnahme noch freigegebene
+Modelle, Fachkatalog, OCR-/Bildprüfung oder Datenschutz-/SSO-/Speicherfreigaben.
+Das Sicherheits-Definition-of-Done und private Produktion bleiben offen.
+
 **Remediation 27.11.2026:** Die Produktionssperren bleiben unverändert. Neu ist ein
 begrenzter Operator-PDF-Pfad für synthetische/geprüfte öffentliche Testdaten und
 ein kontrollierter `local_pilot`-Anschluss an den vorhandenen Ollama-Adapter.

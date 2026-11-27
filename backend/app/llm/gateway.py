@@ -10,11 +10,17 @@ from app.llm.errors import LLMError
 from app.llm.model_registry import ModelDefinition, ModelRegistry
 from app.llm.model_router import ModelRouter, ResourceBudget, RoutingDecision, TaskType
 from app.llm.providers.base import Completion, LLMProvider
+from app.security.access_control import principal
 from app.security.audit_service import AuditEvent, AuditService
 from app.security.classification import classify, combine
 from app.security.egress_policy import inference_dispatch
 from app.security.information_flow import InformationLabel
 from app.security.policy_engine import PolicyEngine
+from app.security.tool_permissions import (
+    current_agent,
+    validate_model_messages,
+    validate_model_output,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -104,6 +110,7 @@ class LLMGateway:
         resources: ResourceBudget | None = None,
         exclude_manufacturers: frozenset[str] = frozenset(),
         available: dict[str, str] | None = None,
+        required_tasks: tuple[TaskType, ...] = (),
     ) -> RoutingDecision:
         if available is None:
             provider = self.providers.get("ollama")
@@ -120,6 +127,7 @@ class LLMGateway:
             manual_default,
             resources=resources,
             exclude_manufacturers=exclude_manufacturers,
+            required_tasks=required_tasks,
         )
 
     async def complete(
@@ -149,6 +157,24 @@ class LLMGateway:
                 )
             raise
         capability = "structured_output" if output_type else "chat"
+        if "process" not in principal().permissions:
+            raise LLMError(403, "MODEL_ACTOR_DENIED")
+        if label and "read" not in principal().permissions:
+            raise LLMError(403, "MODEL_DOCUMENT_READ_DENIED")
+        validate_model_messages(messages)
+        agent = current_agent.get()
+        if agent and (
+            agent.owner_subject != principal().subject
+            or not label
+            or label.analysis_id != agent.run_id
+            or not label.document_ids <= agent.allowed_documents
+            or model_id != agent.model_id
+            or model_id not in agent.allowed_models
+            or role != agent.role
+        ):
+            raise LLMError(403, "MODEL_AGENT_SCOPE_DENIED")
+        if label and (not label.analysis_id or not label.document_ids):
+            raise LLMError(403, "MODEL_DOCUMENT_SCOPE_REQUIRED")
         if capability not in model.capabilities or model.provider not in self.providers:
             raise LLMError(503, "Provider oder Modellfähigkeit ist nicht verfügbar.")
         schema = output_type.model_json_schema() if output_type else None
@@ -188,8 +214,11 @@ class LLMGateway:
         if output_type is None:
             return response, None
         try:
-            return response, output_type.model_validate_json(response.text)
-        except ValidationError:
+            validate_model_output(json.loads(response.text))
+            parsed = output_type.model_validate_json(response.text)
+            validate_model_output(parsed.model_dump())
+            return response, parsed
+        except (ValidationError, json.JSONDecodeError):
             raise LLMError(
                 502, "Modellantwort entspricht nicht dem freigegebenen Schema."
             ) from None

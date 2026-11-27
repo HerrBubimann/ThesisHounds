@@ -1,5 +1,12 @@
 # Experiment design
 
+Ergänzung 27.11.2026: Das bestehende Lab unterstützt einen getrennten
+**Planungsvergleich A/B/C** auf demselben D-Kriterienkern: keine Zusatzplanung,
+Regexbaseline, semantischer LLM-Plan. Diese Varianten heißen `planning_variant`
+und ändern die historischen Architekturbezeichnungen unten nicht.
+[Protokoll und Reproduktion](../architecture/semantic_adaptive_planning.md#abc-vergleich-im-bestehenden-lab),
+[tatsächliche Mocknachweise und offene Realabnahme](semantic_planning_results.md).
+
 Beitrag: OFF-5, ENG-8. Protokoll v1, 2026-11-26. Das neue Lab benutzt denselben
 kriteriumsweisen Reviewer, Gateway, Katalog, Dokumenttyp, Factory und dieselbe Policy
 wie der vertikale MVP. Es ersetzt nicht die Legacy-A–D-Modi, deren historische

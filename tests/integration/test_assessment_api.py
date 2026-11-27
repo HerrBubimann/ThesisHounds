@@ -60,10 +60,15 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
             assert client.post(path + "/human-review", json=human).status_code == 200
         # Independent AI prompts never contain a human first review.
         assert "HUMAN_PRIVATE_MARKER" not in json.dumps(provider.contexts)
-        # Three mandatory calls, one controlled topic supplement and four adversarial reviews.
-        assert len(provider.contexts) == 8
+        # Three mandatory calls, a scripted zero-agent semantic plan and three reviews.
+        assert len(provider.contexts) == 7
         assert (
-            sum("adversarial academic verifier" in c[0]["content"] for c in provider.contexts) == 4
+            sum("adversarial academic verifier" in c[0]["content"] for c in provider.contexts) == 3
+        )
+        assert sum("Distinguish APPLIED methods" in c[0]["content"] for c in provider.contexts) == 1
+        assert all(
+            not f.supplemental and f.verification_rounds
+            for f in application.state.runtime.assessments.records[key].ai
         )
         assert client.get(path + "/comparison").status_code == 409
         assert client.post(path + "/release", json={"confirmed": True}).status_code == 200

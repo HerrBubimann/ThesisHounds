@@ -172,6 +172,9 @@ async def benchmark(gateway: LLMGateway, model_ids: list[str], repeats: int = 1)
 
 
 async def main():
+    from app.security.access_control import DEMO_PRINCIPAL, current_principal
+
+    current_principal.set(DEMO_PRINCIPAL)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", nargs="+", required=True)
     parser.add_argument("--repeats", type=int, default=1)

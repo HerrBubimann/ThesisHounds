@@ -1,6 +1,7 @@
 from app.core.configuration import ExecutionLimits
 from app.llm.errors import LLMError
 from app.schemas.domain import AgentRecord, AgentStatus, now
+from app.security.access_control import principal
 
 
 class AgentRegistry:
@@ -13,6 +14,11 @@ class AgentRegistry:
 
     def register_many(self, records: list[AgentRecord]) -> list[AgentRecord]:
         """Validate the complete batch before mutating this process-local registry."""
+        actor = principal()
+        if "process" not in actor.permissions:
+            raise LLMError(403, "AGENT_ACTOR_DENIED")
+        if any(r.owner_subject and r.owner_subject != actor.subject for r in records):
+            raise LLMError(403, "AGENT_OWNER_DENIED")
         identifiers = [record.agent_id for record in records]
         if len(set(identifiers)) != len(identifiers) or any(
             identifier in self.records for identifier in identifiers
@@ -34,6 +40,7 @@ class AgentRegistry:
                 parent = proposed_by_id.get(child.parent_agent)
                 if (
                     parent is None
+                    or parent.owner_subject != actor.subject
                     or parent.run_id != child.run_id
                     or not child.allowed_models <= parent.allowed_models
                     or not child.allowed_tools <= parent.allowed_tools
@@ -44,6 +51,8 @@ class AgentRegistry:
                     raise LLMError(403, "AGENT_INHERITANCE_DENIED")
         # No await between the quota checks and insertion: atomic on the runtime event loop.
         self.records.update((record.agent_id, record) for record in records)
+        for record in records:
+            record.owner_subject = actor.subject
         return records
 
     def remaining_specialists(self, run_id: str) -> int:

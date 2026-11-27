@@ -99,6 +99,8 @@ def render_assessment_review():
         )
         if record.get("cohort"):
             render_rules(record.get("institutional_rules", {}))
+        if record.get("human_completed"):
+            render_document_security(path)
         st.caption(
             "Inferenzmodus: Lokaler Ollama-Pilot; Laufstatus separat prüfen."
             if real_mode
@@ -235,11 +237,9 @@ def render_comparison(path, record):
     render_finding_feedback(path, comparison, writable=record["state"] != "FINALIZED")
     with st.expander("Analyseherkunft und Ressourcen"):
         if st.button("Geschützte Provenance anzeigen"):
-            st.text(
-                json.dumps(
-                    request_backend("GET", path + "/provenance"), ensure_ascii=False, indent=2
-                )
-            )
+            provenance = request_backend("GET", path + "/provenance")
+            render_adaptive_planning(provenance.get("adaptive_planning"))
+            st.text(json.dumps(provenance, ensure_ascii=False, indent=2))
     for entry in comparison["discussion"]:
         st.text(f"Frage: {entry['question']}\nPrüfung: {entry['answer']}")
     if record["state"] == "FINALIZED":
@@ -310,6 +310,73 @@ def render_comparison(path, record):
         if st.button("Gutachtenentwurf abschließend menschlich freigeben"):
             request_backend("POST", path + "/finalize", json={"confirmed": True})
             st.rerun()
+
+
+def render_document_security(path):
+    with st.expander("Lokale Dokumentsicherheit"):
+        st.caption("Verdacht ist kein Täuschungsnachweis und ändert keine fachliche Bewertung.")
+        if st.button("Sicherheitsprüfung nach Erstbewertung öffnen"):
+            st.session_state[path + "_security"] = request_backend(
+                "GET", path + "/document-security"
+            )
+        report = st.session_state.get(path + "_security")
+        if not report:
+            return
+        st.text("Verarbeitungsstatus: " + report["state"])
+        for finding in report["findings"]:
+            st.text(f"Seite {finding['page']}: {finding['suspicion_type']} · {finding['method']}")
+            st.text(finding["quote"])
+            st.text(finding["context"])
+        with st.form(path + "_security_form"):
+            decision = st.selectbox(
+                "Weitere PUBLIC-Verarbeitung",
+                ["Gesperrt lassen", "Nach Prüfung zulassen"],
+                index=None,
+            )
+            reason = st.text_area("Begründung der Sicherheitsentscheidung")
+            confirmed = st.checkbox(
+                "Alle aufgeführten Hinweise geprüft; Datenschutzregeln bleiben bestehen"
+            )
+            if st.form_submit_button("Sicherheitsentscheidung dokumentieren"):
+                if not confirmed or decision is None or not reason.strip():
+                    st.warning("Entscheidung, Begründung und Bestätigung erforderlich.")
+                else:
+                    st.session_state[path + "_security"] = request_backend(
+                        "POST",
+                        path + "/document-security/review",
+                        json={
+                            "finding_ids": [f["finding_id"] for f in report["findings"]],
+                            "allow_public_processing": decision == "Nach Prüfung zulassen",
+                            "rationale": reason,
+                            "confirmed": True,
+                        },
+                    )
+                    st.rerun()
+
+
+def render_adaptive_planning(plan):
+    if not plan:
+        return
+    st.write("Begründung zusätzlicher Prüfungen")
+    st.text("Planungsmodus: " + plan.get("mode", "UNKNOWN"))
+    st.text("Planungsstatus: " + plan.get("status", "UNKNOWN"))
+    if plan.get("mocked"):
+        st.info("Simulierte Planung; kein Nachweis tatsächlicher Modellleistung.")
+    for method in plan.get("understanding", {}).get("procedures", []):
+        st.text("Verfahren: " + method["name"] + " · " + method["use"])
+    if not plan.get("proposals"):
+        st.text(plan.get("rationale", "Keine zusätzlichen Prüfaufträge erstellt."))
+    for proposal in plan.get("proposals", []):
+        st.text(proposal["name"])
+        st.text("Kriterium: " + proposal.get("criterion_id", proposal["category"]))
+        st.text(
+            proposal.get("rationale", "Regelbasierter Vergleich; keine semantische Begründung.")
+        )
+        if "task" in proposal:
+            st.text("Prüfauftrag: " + proposal["task"])
+        for ref in proposal.get("resolved_evidence", []):
+            st.text(f"Seite {ref['page']}, Zeichen {ref['start']}–{ref['end']}: {ref['quote']}")
+    st.caption("Belegtreffer und Methodeneinordnung beweisen keine fachliche Notwendigkeit.")
 
 
 def render_finding_feedback(path, comparison, *, writable):

@@ -18,6 +18,7 @@ from typing import Literal
 from uuid import uuid4
 
 import httpx
+from app.agents.adaptive_assessment import PLANNING_SYSTEM
 from app.assessments.adversarial_verification import ADVERSARIAL_SYSTEM
 from app.assessments.ai_review import SIMPLE_SYSTEM, SYSTEM, AISecondReviewer
 from app.assessments.coverage import check_coverage
@@ -30,6 +31,7 @@ from app.evaluation.metrics import (
     consistency,
     digest,
     fingerprint,
+    planning_metrics,
     quality_metrics,
     variation_comparisons,
 )
@@ -59,6 +61,7 @@ Variation = Literal[
 
 class ExperimentRequest(StrictModel):
     document_ids: list[str] = Field(default_factory=list, max_length=20)
+    planning_variants: list[Literal["A", "B", "C"]] = Field(default_factory=list, max_length=3)
     architectures: list[Literal["A", "B", "C", "D", "E"]] = Field(
         default_factory=lambda: list("ABCDE"), min_length=1, max_length=5
     )
@@ -78,8 +81,13 @@ class ExperimentRequest(StrictModel):
             or len(set(self.variations)) != len(self.variations)
             or len(set(self.ablations)) != len(self.ablations)
             or len(set(self.document_ids)) != len(self.document_ids)
+            or len(set(self.planning_variants)) != len(self.planning_variants)
         ):
             raise ValueError("Duplicate experiment conditions")
+        if self.planning_variants and (
+            self.architectures != ["D"] or self.ablations != ["baseline"]
+        ):
+            raise ValueError("PLANNING_COMPARISON_REQUIRES_SAME_FIXED_D_CORE_AND_BASELINE")
         return self
 
 
@@ -165,7 +173,9 @@ async def run_experiment(
         request.document_ids or [None], request.variations, request.ablations
     ):
         base = load_pilot_document(pilot_dir, document_id, "") if document_id else None
-        for architecture in request.architectures:
+        for architecture, planning_variant in product(
+            request.architectures, request.planning_variants or [None]
+        ):
             for repeat in range(request.repeats):
                 document, catalog, local, order = condition(config, profile, variation, base)
                 dataset_hash, profile_hash = digest(document.pages), digest(catalog.model_dump())
@@ -178,6 +188,7 @@ async def run_experiment(
                 started, before = time.monotonic(), sample_resources()
                 row = {
                     "architecture": architecture,
+                    "planning_variant": planning_variant,
                     "document_id": document.document_id,
                     "source_pdf_sha256": base.source_sha256 if base else None,
                     "variation": variation,
@@ -214,6 +225,9 @@ async def run_experiment(
                         retrieval=ablation != "no_retrieval",
                         dynamic=ablation != "no_dynamic",
                         verification=ablation != "no_verification",
+                        planning_mode={"A": "off", "B": "regex_baseline", "C": "semantic"}.get(
+                            planning_variant
+                        ),
                     )
                     flat = [v for f in findings for v in [f, *f.supplemental]]
                     coverage = check_coverage(catalog, findings)
@@ -229,6 +243,22 @@ async def run_experiment(
                     )
                     if scoped_reference is not None and not compatible:
                         quality["reference_status"] = "REFERENCE_SCOPE_MISMATCH"
+                    planning = findings[0].provenance.get("adaptive_planning", {})
+                    planning_complete = (
+                        (
+                            planning_variant == "A"
+                            or (
+                                planning_variant == "B"
+                                and planning.get("status") == "REGEX_BASELINE_NOT_SEMANTIC"
+                            )
+                            or (
+                                planning_variant == "C"
+                                and planning.get("status") == "VALIDATED_PROPOSAL"
+                            )
+                        )
+                        and len(planning.get("proposals", [])) == len(planning.get("execution", []))
+                        and all(e["status"] == "COMPLETED" for e in planning.get("execution", []))
+                    )
                     row.update(
                         status="COMPLETED",
                         findings=[f.model_dump() for f in findings],
@@ -239,7 +269,14 @@ async def run_experiment(
                         evidence_match_rate=sum(f.evidence_status == "QUOTE_MATCHED" for f in flat)
                         / len(flat),
                         unresolved_conflicts=sum(f.conflict for f in flat),
+                        adaptive_planning=planning,
+                        planning_evaluation=planning_metrics(
+                            planning, scoped_reference if compatible else None
+                        ),
+                        planning_execution_complete=planning_complete if planning_variant else None,
                     )
+                    if planning_variant and not planning_complete:
+                        row["status"] = "PLANNING_INCOMPLETE"
                 except LLMError as exc:
                     row["error_code"] = exc.status_code
                 calls += budget.calls
@@ -275,7 +312,8 @@ async def run_experiment(
         "configuration": config.limits.model_dump(),
         "profile": profile.model_dump(),
         "prompts": {"simple": SIMPLE_SYSTEM, "analysis": SYSTEM, "adversarial": ADVERSARIAL_SYSTEM},
-        "prompts_sha256": digest([SIMPLE_SYSTEM, SYSTEM, ADVERSARIAL_SYSTEM]),
+        "planning_prompt": PLANNING_SYSTEM,
+        "prompts_sha256": digest([SIMPLE_SYSTEM, SYSTEM, ADVERSARIAL_SYSTEM, PLANNING_SYSTEM]),
         "seed": None,
         "complete": len(rows)
         == len(request.architectures)
@@ -283,6 +321,7 @@ async def run_experiment(
         * len(request.ablations)
         * request.repeats
         * max(1, len(request.document_ids))
+        * max(1, len(request.planning_variants))
         and all(row["status"] == "COMPLETED" for row in rows),
         "total_model_calls": calls,
         "results": rows,
@@ -309,6 +348,7 @@ def export_results(report: dict, directory: Path) -> tuple[Path, Path]:
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")
     fields = [
         "document_id",
+        "planning_variant",
         "source_pdf_sha256",
         "architecture",
         "ablation",
@@ -333,12 +373,19 @@ def export_results(report: dict, directory: Path) -> tuple[Path, Path]:
         "inference_gpu_peak_bytes",
         "point_deviation",
         "data_leakage_risk",
+        "proposed_specialists",
+        "created_specialists",
+        "completed_specialists",
+        "specialist_relevance",
+        "unnecessary_specialists",
+        "missing_necessary_specialists",
+        "planning_reference_status",
     ]
     with table.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for row in report["results"]:
-            values = {**row, **row.get("quality", {})}
+            values = {**row, **row.get("quality", {}), **row.get("planning_evaluation", {})}
             writer.writerow(
                 {
                     key: (
@@ -354,6 +401,11 @@ def export_results(report: dict, directory: Path) -> tuple[Path, Path]:
 
 
 async def main():
+    from app.security.access_control import DEMO_PRINCIPAL, current_principal
+
+    current_principal.set(
+        DEMO_PRINCIPAL
+    )  # Local synthetic/PUBLIC CLI, never a university identity.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=Path("reports/evaluation"))
     parser.add_argument("--provider", choices=["mock", "ollama"], default="mock")
@@ -365,7 +417,10 @@ async def main():
     parser.add_argument("--references", type=Path)
     parser.add_argument("--document-ids", nargs="*", default=[])
     parser.add_argument("--architectures", nargs="+", choices=list("ABCDE"), default=list("ABCDE"))
+    parser.add_argument("--planning-variants", nargs="+", choices=list("ABC"), default=[])
     args = parser.parse_args()
+    if args.planning_variants:
+        args.architectures = ["D"]
     settings = Settings()
     config = RuntimeConfig(settings.config_dir)
     reference = None
@@ -428,6 +483,7 @@ async def main():
             ExperimentRequest(
                 document_ids=args.document_ids,
                 architectures=args.architectures,
+                planning_variants=args.planning_variants,
                 repeats=args.repeats,
                 variations=variations,
                 ablations=["baseline", "no_retrieval", "no_dynamic", "no_verification"]

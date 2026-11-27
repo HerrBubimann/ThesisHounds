@@ -15,6 +15,7 @@ def plan_escalation(finding, *, complex_topic=False, resources_available=True):
         or unresolved_question
         or finding.conflict
         or bool(finding.relationships)
+        or "SECURITY_CONTEXT_UNIFORM_POSITIVE_REQUIRES_HUMAN" in finding.open_questions
     )
     specialized = complex_topic and (
         critical or deficient or unresolved_question or finding.claim_type == "ABSENCE"
@@ -30,7 +31,7 @@ def plan_escalation(finding, *, complex_topic=False, resources_available=True):
         or finding.claim_type == "ABSENCE"
         or finding.conflict
         or (verify and not resources_available)
-        or any("FAILED_REQUIRES_HUMAN" in q for q in finding.open_questions)
+        or any("REQUIRES_HUMAN" in q for q in finding.open_questions)
     )
     return {
         "level": 4 if human else 3 if verify else 2,

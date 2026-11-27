@@ -1,9 +1,7 @@
 import hashlib
 import json
 import os
-import subprocess
-import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -12,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.security.classification import Classification, classify
 from app.security.sperrvermerk_detector import detect_sperrvermerk
+from app.services.pdf_security import extract_pdf_subprocess
 
 
 class Document(BaseModel):
@@ -25,6 +24,9 @@ class Document(BaseModel):
     source_sha256: str | None = None
     extraction_version: str | None = None
     extraction_warnings: list[str] = Field(default_factory=list)
+    security_inspection: dict = Field(default_factory=dict)
+    imported_at: datetime | None = None
+    parser_version: str | None = None
 
     @field_validator("classification", mode="before")
     @classmethod
@@ -121,25 +123,12 @@ def register_pilot_pdf(root: Path, data: bytes, approval: PilotApproval) -> str:
     approval = PilotApproval.model_validate(approval.model_dump())
     if not data.startswith(b"%PDF-") or not 0 < len(data) <= 8_000_000:
         raise ValueError("PILOT_PDF_TYPE_OR_SIZE_DENIED")
-    worker = Path(__file__).with_name("pdf_worker.py")
-    # Drop ambient credentials, proxy variables and tracing settings from the parser.
-    env = {k: os.environ[k] for k in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP") if k in os.environ}
     try:
-        result = subprocess.run(
-            [sys.executable, "-I", "-B", str(worker)],
-            input=data,
-            capture_output=True,
-            timeout=20,
-            check=False,
-            env=env,
-        )
-        if result.returncode or len(result.stdout) > 4_000_000:
-            raise ValueError("PILOT_PARSER_REJECTED")
-        extracted = json.loads(result.stdout)
+        extracted = extract_pdf_subprocess(data)
         pages = {int(k): v for k, v in extracted["pages"].items()}
         if detect_sperrvermerk(pages).detected:
             raise ValueError("PILOT_NOTICE_REQUIRES_AUTHORIZED_REVIEW")
-    except (OSError, subprocess.SubprocessError, KeyError, TypeError, json.JSONDecodeError):
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
         raise ValueError("PILOT_PARSER_UNAVAILABLE_OR_REJECTED") from None
     sha = hashlib.sha256(data).hexdigest()
     document = Document(
@@ -153,6 +142,9 @@ def register_pilot_pdf(root: Path, data: bytes, approval: PilotApproval) -> str:
         source_sha256=sha,
         extraction_version=extracted["parser"],
         extraction_warnings=extracted["warnings"],
+        security_inspection=extracted.get("security_inspection", {}),
+        imported_at=datetime.now(UTC),
+        parser_version=extracted.get("security_inspection", {}).get("parser_version"),
     )
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     if len(list(root.glob("*.json"))) >= 20:
@@ -197,6 +189,7 @@ def load_pilot_document(root: Path, document_id: str, analysis_id: str) -> Docum
         and document.digest == text_digest
         and document.classification == "PUBLIC"
         and document.extraction_version == "bounded-pypdf.v1"
+        and document.security_inspection.get("version") == "secure-pdf-preflight.v1"
         and not document.sperrvermerk.detected
     ):
         raise ValueError("PILOT_DOCUMENT_INTEGRITY_DENIED")

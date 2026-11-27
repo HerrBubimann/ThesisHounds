@@ -1,5 +1,34 @@
 # Threat model and trust boundaries
 
+## Document Security: aktueller Stand 27.11.2026
+
+Assets: Originalarbeiten, extrahierte Texte, vertrauliche Ableitungen,
+Bewertungsintegrität, Kriterienkataloge, Modelldigests, menschliche Erstbewertung
+und Sicherheitsentscheidungen. Angreifer kontrollieren Dokumentbytes,
+Literaturmetadaten oder Modellantworten, erhalten dadurch jedoch keine
+Backend-/OS-Identität. Kompromittierter Backendcode oder privilegierter Hostzugriff
+liegt außerhalb der Anwendungsrechtegarantie.
+
+| Bedrohung | Bestehender Pfad / ergänzte Kontrolle | Restgrenze |
+|---|---|---|
+| PDF-Aktion/Parserexploit | gemeinsamer Worker, aktive/verschlüsselte Inhalte abweisen, Ressourcenlimits, Python-Socket-/Prozess-/Schreibverbot | native Exploits, kein geprüfter OS-Netzwerksandbox; private Dokumente gesperrt |
+| versteckte bewertungsbezogene Anweisung | Text-/Unicode-/Layoutindikatoren, Quarantäne, Review nach unabhängiger Erstbewertung | Bild/OCR, komplexes Layout und paraphrasierte/kodierte Angriffe unvollständig |
+| Modell kompromittiert Agentenplan | Specs bleiben Vorschläge; Factory/Registry prüfen Owner, Parent, Scope und Rechte | fachlich plausible unnötige Spezialisten möglich; Budgets begrenzen Ressourcen |
+| Modell fordert fremde Daten/Tools | dokumentgebundene Tool-Firewall und aktueller Agentkontext, read/process, feste Zwecke/Parameter | kein Schutz gegen beliebigen Python-Code im Backend |
+| strukturierte Ausgabe versteckt Aktion/Note | Raw-JSON-Feldprüfung vor Pydantic, danach Schemata/Evidenz/Kriterienabdeckung | formal gültige falsche oder unterdrückende Aussage bleibt möglich |
+| indirekte Literaturinjektion | untrusted Quellenfelder, Labels/Scope und geschlossene Research-Runtime | lokale Snapshots können fachlich manipuliert/veraltet sein |
+| Sicherheitswarnung verzerrt Erstbewertung | detaillierte Befunde erst nach eingefrorenem Erstreview; Verdacht verändert keine Note | technische Upload-/Pausenmeldungen vorab sichtbar; Nutzerstudie fehlt |
+| menschliche Freigabe entkräftet Policy | nur PUBLIC ohne Sperrvermerk, exact Finding-IDs, keine BLOCKED-Freigabe | Fehlentscheidung eines berechtigten Menschen; kein revisionssicheres Produktionsaudit |
+| Scanüberlastung/abgeschnittene Befunde | Parser-/Text-/Findinglimits, Überschreitung blockiert | legitime große/komplexe PDFs können abgelehnt werden |
+
+Die [vollständige Pfadübersicht](prompt_injection.md), [PDF-Grenzen](pdf_security.md)
+und [Agentenprüfungen](agent_security.md) konkretisieren diese Grenzen.
+Der optionale lokale Klassifikator ist nicht freigegeben/empirisch getestet.
+PUBLIC-Pilot und deterministische Tests sind möglich; private Verarbeitung,
+SSO, Zielhost-/Netz-/Speicherabnahme bleiben blockiert. Nachfolgende Abschnitte
+sind historische Stände; ihre absoluten Aussagen zu ausschließlich synthetischen
+Eingängen werden durch den aktuellen kontrollierten PUBLIC-Pilot präzisiert.
+
 ## Folgeaudit: Transport und Bereitstellung (27.11.2026)
 
 | STRIDE | Konkreter Pfad | Ergänzte Kontrolle | Offene Grenze |

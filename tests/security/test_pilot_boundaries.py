@@ -36,7 +36,7 @@ def test_pilot_storage_cannot_be_inside_repository():
 
 @pytest.mark.parametrize("data", [b"not a pdf", b"%PDF-" + b"x" * 8_000_001])
 def test_type_and_size_rejected_before_parser_or_storage(tmp_path, data):
-    with patch("app.services.document_store.subprocess.run") as worker:
+    with patch("app.services.pdf_security.subprocess.run") as worker:
         with pytest.raises(ValueError):
             register_pilot_pdf(tmp_path / "catalog", data, approval())
         worker.assert_not_called()

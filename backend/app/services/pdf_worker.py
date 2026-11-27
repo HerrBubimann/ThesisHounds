@@ -75,13 +75,19 @@ def main():
         constrain()
         # Fixed local source directory, independent of caller PYTHONPATH / current directory.
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from app.knowledge.importer import extract_candidate
+        from app.services.pdf_security import inspect_pdf
 
+        restrict_parser()
         data = sys.stdin.buffer.read(8_000_001)
-        result = extract_candidate(data, ".pdf")
+        pages, inspection = inspect_pdf(data)
+        result = {
+            "pages": pages,
+            "text": "\n".join(pages.values()),
+            "warnings": ["NO_OCR_OR_VISUAL_SAFETY_GUARANTEE"],
+        }
         if (
             not result["pages"]
-            or not result["text"].strip()
+            or (not result["text"].strip() and sys.argv[1:] != ["--allow-empty-candidate"])
             or len(result["text"].encode()) > 2_000_000
         ):
             raise ValueError("PARSER_NO_USABLE_BOUNDED_TEXT")
@@ -92,15 +98,57 @@ def main():
                     "warnings": result["warnings"],
                     "parser": "bounded-pypdf.v1",
                     "resource_limits": "ENFORCED",
+                    "security_inspection": inspection,
                 },
                 ensure_ascii=False,
             ).encode()
         )
         return 0
-    except Exception:
+    except Exception as exc:
         # Never echo parser exceptions, raw PDF data or file names.
-        sys.stdout.write('{"error":"PUBLIC_PDF_EXTRACTION_REJECTED"}')
+        code = (
+            "PDF_ACTIVE_CONTENT"
+            if str(exc) in {"PDF_ACTIVE_OR_EMBEDDED_CONTENT_DENIED", "PDF_EMBEDDED_FILE_DENIED"}
+            else "PUBLIC_PDF_EXTRACTION_REJECTED"
+        )
+        if str(exc) == "PDF_ENCRYPTED":
+            code = "PDF_ENCRYPTED"
+        sys.stdout.write(json.dumps({"error": code}))
         return 1
+
+
+def restrict_parser():
+    """Python audit boundary, not a claim of OS sandboxing native extensions."""
+    roots = (
+        Path(sys.prefix).resolve(),
+        Path(sys.base_prefix).resolve(),
+        Path(__file__).resolve().parents[2],
+    )
+
+    def audit(event, args):
+        if event.startswith(
+            ("socket.", "subprocess.", "os.exec", "os.spawn", "os.posix_spawn")
+        ) or event in {
+            "os.system",
+            "os.remove",
+            "os.rename",
+            "os.mkdir",
+            "os.rmdir",
+            "ctypes.dlopen",
+        }:
+            raise PermissionError("PARSER_OPERATION_DENIED")
+        if event == "open":
+            path, mode, flags = args
+            if isinstance(path, int):
+                if path not in {0, 1, 2}:
+                    raise PermissionError("PARSER_FD_DENIED")
+                return
+            if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC) or not any(
+                Path(path).resolve().is_relative_to(root) for root in roots
+            ):
+                raise PermissionError("PARSER_FILE_ACCESS_DENIED")
+
+    sys.addaudithook(audit)
 
 
 if __name__ == "__main__":

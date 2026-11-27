@@ -21,6 +21,7 @@ from app.assessments.schemas import (
     CriterionDecision,
     DiscussionOutput,
     DiscussionRequest,
+    DocumentSecurityDecision,
     FindingFeedback,
     HumanReviewSubmission,
 )
@@ -33,8 +34,14 @@ from app.llm.gateway import CallBudget, LLMGateway
 from app.research.local_verification import verify_local_sources
 from app.research.snapshot_store import load_cache
 from app.schemas.domain import now
-from app.security.access_control import AccessControl
+from app.security.access_control import AccessControl, principal
 from app.security.classification import Classification, combine
+from app.security.document_security import (
+    SecurityFinding,
+    SecurityReport,
+    inspect_document,
+    optional_semantic_check,
+)
 from app.security.information_flow import InformationLabel
 from app.security.injection_detection import detect_injection
 from app.services.document_intelligence import structure_document
@@ -66,6 +73,9 @@ class Assessment:
     provenance_snapshot: dict = field(default_factory=dict)
     research_manifest: list[dict] = field(default_factory=list)
     architecture: str = "E"
+    document_security: SecurityReport | None = None
+    security_decisions: list[dict] = field(default_factory=list)
+    semantic_security_checked: bool = False
 
 
 class AssessmentWorkflow:
@@ -103,6 +113,8 @@ class AssessmentWorkflow:
             != record.provenance_snapshot["document_version_sha256"]
             or record.document.source_sha256 != record.provenance_snapshot["source_pdf_sha256"]
             or record.document.document_id != record.provenance_snapshot["document_id"]
+            or content_digest(record.document.security_inspection)
+            != record.provenance_snapshot["security_inspection_sha256"]
         ):
             raise LLMError(409, "DOCUMENT_VERSION_CHANGED")
         return record
@@ -173,6 +185,7 @@ class AssessmentWorkflow:
         )
         self.access.create(record.id)
         record.provenance_snapshot = snapshot(record, self.config)
+        record.document_security = inspect_document(document)
         self.records[record.id] = record
         self.event(record, "PROFILE_SELECTED")
         return self.status(record.id)
@@ -312,6 +325,8 @@ class AssessmentWorkflow:
         self.access.require(assessment_id, "process")
         record = self.get(assessment_id)
         self.writable(record)
+        if self.security_pending(record):
+            raise LLMError(423, "LOCAL_DOCUMENT_REVIEW_REQUIRED")
         if record.ai_state != "PENDING":
             raise LLMError(409, "KI-Erstbewertung wurde bereits gestartet.")
         active = sum(not t.done() for t in self.tasks.values()) + self.legacy_active()
@@ -326,6 +341,33 @@ class AssessmentWorkflow:
         limits = self.config.limits
         try:
             async with asyncio.timeout(limits.run_timeout_seconds):
+                if limits.semantic_injection_model_id and not record.semantic_security_checked:
+                    indicator = await optional_semantic_check(
+                        self.gateway, self.config, record.document, record.budget
+                    )
+                    record.semantic_security_checked = True
+                    record.provenance_snapshot["semantic_injection_check"] = indicator
+                    if indicator["label"] != "BENIGN":
+                        finding = SecurityFinding(
+                            document_id=record.document.document_id,
+                            document_sha256=record.document.source_sha256
+                            or content_digest(record.document.pages),
+                            section="BOUNDED_EXCERPT",
+                            suspicion_type="POSSIBLE_PROMPT_INJECTION",
+                            method="OPTIONAL_LOCAL_MODEL",
+                            context=indicator.get(
+                                "rationale", "Classifier unavailable; no attack established."
+                            ),
+                            risk="MEDIUM",
+                            classification=record.document.classification,
+                        )
+                        record.document_security = SecurityReport(
+                            state="MANUAL_REVIEW_REQUIRED",
+                            findings=(*record.document_security.findings, finding),
+                        )
+                        record.ai_state = "PENDING"
+                        self.event(record, "SECURITY_REVIEW_REQUIRED")
+                        return
                 result = await self.reviewer.review(
                     record.id,
                     record.document.model_copy(deep=True),
@@ -350,6 +392,8 @@ class AssessmentWorkflow:
         self.access.require(assessment_id, "review")
         record = self.get(assessment_id)
         self.writable(record)
+        if self.security_pending(record):
+            raise LLMError(423, "LOCAL_DOCUMENT_REVIEW_REQUIRED")
         if not record.human or record.ai_state != "COMPLETED" or record.ai_released:
             raise LLMError(409, "Beide Erstbewertungen müssen abgeschlossen sein.")
         if not check_coverage(record.profile, record.ai).complete:
@@ -469,6 +513,9 @@ class AssessmentWorkflow:
             == record.provenance_snapshot["document_version_sha256"],
             "ai_state": record.ai_state,
             "analysis_complete": self.status(assessment_id)["analysis_complete"],
+            "adaptive_planning": record.ai[0].provenance.get("adaptive_planning")
+            if record.ai
+            else None,
             "findings": [
                 {
                     "finding_id": f.finding_id,
@@ -486,6 +533,7 @@ class AssessmentWorkflow:
             "human_decisions": list(record.decisions),
             "finding_feedback": list(record.finding_feedback),
             "academic_decisions": list(record.academic_decisions),
+            "document_security_decisions": list(record.security_decisions),
             "model_calls": record.budget.calls,
             "observed_tokens": record.budget.observed_tokens,
             "reserved_tokens": record.budget.reserved_tokens,
@@ -714,10 +762,82 @@ class AssessmentWorkflow:
         self.access.require(assessment_id, "review")
         record = self.released(assessment_id)
         self.writable(record)
+        if self.security_pending(record):
+            raise LLMError(423, "LOCAL_DOCUMENT_REVIEW_REQUIRED")
         self.draft(assessment_id)
         record.terminal = "FINALIZED"
         self.event(record, "FINAL_HUMAN_RELEASE")
         return self.draft(assessment_id)
+
+    @staticmethod
+    def security_pending(record):
+        return bool(
+            record.document_security
+            and record.document_security.state
+            in {"QUARANTINED", "BLOCKED", "MANUAL_REVIEW_REQUIRED"}
+            and not (
+                record.security_decisions
+                and record.security_decisions[-1]["allow_public_processing"]
+                and set(record.security_decisions[-1]["finding_ids"])
+                == {f.finding_id for f in record.document_security.findings}
+            )
+        )
+
+    def security_findings(self, assessment_id: str):
+        record = self.get(assessment_id)
+        if not record.human:
+            raise LLMError(409, "INDEPENDENT_HUMAN_REVIEW_REQUIRED")
+        reviewed = (
+            set(record.security_decisions[-1]["finding_ids"])
+            if record.security_decisions
+            else set()
+        )
+        return {
+            **record.document_security.model_dump(mode="json"),
+            "findings": [
+                {
+                    **f.model_dump(mode="json"),
+                    "human_review_status": "HUMAN_REVIEWED"
+                    if f.finding_id in reviewed
+                    else "PENDING",
+                }
+                for f in record.document_security.findings
+            ],
+            "state": "HUMAN_REVIEWED"
+            if record.security_decisions
+            and record.security_decisions[-1]["allow_public_processing"]
+            and not self.security_pending(record)
+            else record.document_security.state,
+            "decisions": list(record.security_decisions),
+            "automatic_grade_change": False,
+        }
+
+    def review_security(self, assessment_id: str, decision: DocumentSecurityDecision):
+        self.access.require(assessment_id, "review")
+        record = self.get(assessment_id)
+        self.writable(record)
+        self.security_findings(assessment_id)
+        if set(decision.finding_ids) != {f.finding_id for f in record.document_security.findings}:
+            raise LLMError(422, "SECURITY_FINDING_SCOPE_DENIED")
+        if decision.allow_public_processing and (
+            record.document.classification != "PUBLIC"
+            or record.document.sperrvermerk.detected
+            or record.document_security.state == "BLOCKED"
+        ):
+            raise LLMError(403, "HUMAN_CANNOT_OVERRIDE_PROCESSING_POLICY")
+        if len(record.security_decisions) >= 20:
+            raise LLMError(429, "SECURITY_DECISION_LIMIT")
+        record.security_decisions.append(
+            {
+                **decision.model_dump(),
+                "actor": principal().subject,
+                "at": now().isoformat(),
+                "classification": "RESTRICTED",
+                "confirmed_incident": False,
+            }
+        )
+        self.event(record, "HUMAN_DOCUMENT_SECURITY_REVIEW")
+        return self.security_findings(assessment_id)
 
     async def cancel(self, assessment_id: str) -> dict:
         self.access.require(assessment_id, "process")

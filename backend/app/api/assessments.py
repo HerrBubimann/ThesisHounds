@@ -10,6 +10,7 @@ from app.assessments.schemas import (
     AssessmentRequest,
     CriterionDecision,
     DiscussionRequest,
+    DocumentSecurityDecision,
     ExplicitRelease,
     FindingFeedback,
     HumanReviewSubmission,
@@ -103,6 +104,18 @@ async def provenance(assessment_id: UUID, service: Dependency):
 @router.post("/{assessment_id}/finding-feedback")
 async def finding_feedback(assessment_id: UUID, payload: FindingFeedback, service: Dependency):
     return service.feedback(str(assessment_id), payload)
+
+
+@router.get("/{assessment_id}/document-security")
+async def document_security(assessment_id: UUID, service: Dependency):
+    return service.security_findings(str(assessment_id))
+
+
+@router.post("/{assessment_id}/document-security/review")
+async def review_document_security(
+    assessment_id: UUID, payload: DocumentSecurityDecision, service: Dependency
+):
+    return service.review_security(str(assessment_id), payload)
 
 
 @router.post("/{assessment_id}/discussion")

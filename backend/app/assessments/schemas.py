@@ -204,3 +204,10 @@ class CriterionDecision(StrictModel):
 
 class ExplicitRelease(StrictModel):
     confirmed: Literal[True]
+
+
+class DocumentSecurityDecision(StrictModel):
+    finding_ids: list[str] = Field(max_length=200)
+    allow_public_processing: bool
+    rationale: str = Field(min_length=1, max_length=1000)
+    confirmed: Literal[True]

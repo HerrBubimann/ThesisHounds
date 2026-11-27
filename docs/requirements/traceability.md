@@ -1,5 +1,54 @@
 # Requirements traceability and engineering gap analysis
 
+## Document Security, 27.11.2026 – aktueller Arbeitsstand
+
+Die OFF-1–5-Zuordnung ist aus vorhandener Dokumentation rekonstruiert, keine
+erneute Prüfung der fehlenden Original-PowerPoint/Professorenfreigabe. Historisch
+verlinkte `docs/audit/`-/`docs/remediation/`-Dateien fehlen derzeit im Checkout.
+Die G-IDs werden als bestehende Zuordnung übernommen, nicht als neu bestätigter
+Wortlaut. Status gelten jeweils für den abgegrenzten Umfang; ein grüner
+Softwaretest erteilt keine fachliche oder produktive Freigabe.
+
+| ID / Bezug | Anforderung / konkrete Implementierung | Testreferenz | Status / Grenze |
+|---|---|---|---|
+| DOC-01 / OFF-2,3 / G03,G05 | lokaler begrenzter PDF-Preflight: `backend/app/services/pdf_security.py`, `pdf_worker.py`, `knowledge/importer.py` | `tests/security/test_secure_document_gateway.py::test_active_or_encrypted_pdf_is_rejected_in_the_real_worker`, `test_page_limit_is_checked_before_text_extraction`; Knowledge-Importtests | IMPLEMENTED_AND_TESTED für kontrollierte synthetische/PUBLIC-PDFs; sichere private Gesamtverarbeitung PARTIALLY_IMPLEMENTED |
+| DOC-02 / OFF-2 / G05,G19 | Python-Socket-/Prozess-/Schreib-Deny, Windows JobObject, Timeout: `services/pdf_worker.py` | `test_worker_python_network_process_and_write_operations_are_denied`, bestehende Workergrenztests | IMPLEMENTED_AND_TESTED für Python-/Windows-Grenzen; vollständige OS-Netzsandbox NOT_IMPLEMENTED, POSIX-Ausführung IMPLEMENTED_NOT_VERIFIED |
+| DOC-03 / OFF-2,5 / G22 | Originalbytes/Hash/Importzeit/Parser-/Inspektionsversion: `services/document_store.py`, `assessments/provenance.py` | `test_import_preserves_original_pdf_and_records_versions`, `tests/security/test_pilot_boundaries.py` | IMPLEMENTED_AND_TESTED; signierte Attestation/revisionssichere Produktionsablage NOT_IMPLEMENTED |
+| DOC-04 / OFF-3,5 / G05,G26 | Hidden-Text-/Unicode-/Metadatenindikatoren: `services/pdf_security.py`, `security/injection_detection.py` | `test_hidden_text_indicators_are_detected_without_rewriting_original_text`, `test_metadata_is_untrusted_and_normal_font_is_not_a_hidden_text_indicator` | PARTIALLY_IMPLEMENTED: getestete Heuristiken, keine Hintergrund-/OCR-/Bildgarantie |
+| DOC-05 / OFF-2,3 | Raster-/OCR-Dual-Extraction und Bildinjektion | kein implementierter Pfad/kein ausgeführter Test | NOT_IMPLEMENTED; Rendering/OCR-Binaries fehlen |
+| DOC-06 / OFF-2,3 / G19 | optionale semantische Indikatoren: `security/document_security.py::optional_semantic_check`, `backend/app/core/configuration.py::ExecutionLimits` | `tests/security/test_injection_controls.py::test_optional_local_classifier_requires_artifact_approval_and_cannot_grant_rights` | PARTIALLY_IMPLEMENTED: Software mit Mocks getestet; reale lokale Modelle BLOCKED_BY_EXTERNAL_REQUIREMENTS; Prompt-Guard-/DeBERTa-Adapter NOT_IMPLEMENTED |
+| DOC-07 / OFF-2,3 / G21 | serverseitige Parent-/Owner-/Rechte-/Scopebindung: `agents/agent_factory.py`, `agent_registry.py`, `core/execution_engine.py` | `test_another_actor_cannot_delegate_from_a_registered_parent`, `tests/security/test_agent_guardrails.py`, semantische Planungstests | IMPLEMENTED_AND_TESTED innerhalb der Anwendung; OS-/SSO-Vertrauensgrenze offen |
+| DOC-08 / OFF-2 / G19,G21 | obligatorische Toolprüfung: `security/tool_permissions.py`; festes Modell/Dokumentlabel im `llm/gateway.py` | `test_tool_firewall_checks_every_grant_before_execution`, `test_model_dispatch_is_bound_to_the_current_agent_even_for_valid_local_models`, `test_document_inference_requires_read_permission_before_budget_or_dispatch` | IMPLEMENTED_AND_TESTED für vorhandene Callpfade; kein Schutz gegen beliebigen Backend-Schadcode |
+| DOC-09 / OFF-3,4 / G17 | rohe/typisierte Outputs, Kriterien/Evidenz/Coverage: `llm/gateway.py`, `assessments/ai_review.py`, `coverage.py` | `test_lax_output_schema_cannot_silently_drop_a_tool_or_grade_request`, bestehende Coverage-/Evidenztests | IMPLEMENTED_AND_TESTED für Struktur/Invarianten; wissenschaftliche Aussagegüte BLOCKED_BY_EXTERNAL_REQUIREMENTS |
+| DOC-10 / OFF-4 / G03,G22 | Befunde/Zustände, Review/Embargo, kein Noteneffekt: `security/document_security.py`, `workflows/assessment_workflow.py`, `api/assessments.py`, `frontend/assessment_review.py` | `tests/integration/test_security_review.py` einschließlich exakter IDs, Privacy-Deny, UI und kombiniertem Überlauf | IMPLEMENTED_AND_TESTED mit synthetischen Daten; produktive auditierbare Mehrbenutzerfreigaben PARTIALLY_IMPLEMENTED |
+| DOC-11 / OFF-3,4 | auffällig positive Befunde lösen Gegenprüfung/Humanklärung aus: `assessments/ai_review.py`, `escalation.py` | `test_uniform_positive_model_output_in_suspicious_context_still_requires_human_review` | IMPLEMENTED_AND_TESTED mit kontrollierten Mockantworten; echte Modellunabhängigkeit/-qualität IMPLEMENTED_NOT_VERIFIED |
+| DOC-12 / OFF-2,3 | indirekte Rechercheinjektion: `research/gateway.py`, `agents/research_quality.py`, `security/information_flow.py` | `tests/security/test_academic_privacy.py`, `test_citation_information_flow.py`, vorhandene Quellenreviewtests | IMPLEMENTED_AND_TESTED für lokale Scope-/Denygrenzen; öffentliche Runtime-Rechercheschnittstelle NOT_IMPLEMENTED |
+| DOC-13 / OFF-5 / G26 | reproduzierbare A–E-Control-Ablation: `evaluation/injection_benchmark.py` | `test_synthetic_ablation_distinguishes_detection_prevention_and_missing_semantics`, ausgeführte CLI | IMPLEMENTED_AND_TESTED als deterministisches Experiment; A/B-Modellverhalten MOCK_ONLY, D-Realinferenz BLOCKED_BY_EXTERNAL_REQUIREMENTS; vollständige PDF-/Modellstudie PARTIALLY_IMPLEMENTED |
+| DOC-14 / OFF-2,5 | Mandatory-CI/80-%-Grenze: `.github/workflows/ci.yml`, `pyproject.toml`, `infrastructure/scripts/ci_summary.py` | `tests/unit/test_ci_workflow.py`, `tests/security/test_privacy_ci_gate.py`, gesamte lokale Suite | IMPLEMENTED_AND_TESTED lokal; aktuelle Remote-CI/Dockerbuild IMPLEMENTED_NOT_VERIFIED |
+
+[Abschlussnachweis](../evaluation/security_results.md): 737 bestandene Tests,
+87,02 % kombinierte Coverage, keine Skips. [Benchmarkgrenzen](../evaluation/prompt_injection_benchmark.md)
+und [priorisierte Schritte bis 15.12.2026/25.01.2027](../security/risk_register.md).
+Das vollständige Sicherheits-Definition-of-Done ist noch nicht erfüllt.
+
+## Semantische adaptive Planung, 27.11.2026
+
+Die fünf OFF-Anforderungen bleiben rekonstruierte Anforderungen. Fachkatalog und
+Modellfreigaben fehlen weiterhin; es wird keine amtliche DHBW-Abnahme abgeleitet.
+[Architektur und Reproduktion](../architecture/semantic_adaptive_planning.md),
+[Prüfergebnisse und Grenzen](../evaluation/semantic_planning_results.md).
+
+| ID / Bezug | Umsetzung | Testreferenz | Status und Grenze |
+|---|---|---|---|
+| SEM-1 / OFF-2,3, G02,G04 | `backend/app/agents/adaptive_assessment.py`: strukturiertes ThesisUnderstanding, APPLIED/MENTIONED/UNCLEAR, null Agenten erlaubt; lokales Gateway | `tests/unit/test_semantic_planning.py`, `tests/integration/test_semantic_planning.py` | IMPLEMENTED_AND_TESTED als Software; reale Inferenz IMPLEMENTED_NOT_VERIFIED |
+| SEM-2 / OFF-2,3, G21 | dynamische Fachnamen/Tasks → bestehender AgentSpec, Factory, Registry und ExecutionEngine; feste Rechte/Scope, kein neuer Orchestrator | Factory-/Guardrail-/Securitytests, Planungsregressionen | IMPLEMENTED_AND_TESTED; Vorschläge sind keine fachlich bewiesene Notwendigkeit |
+| SEM-3 / OFF-2,3,5, G20,G27 | `backend/app/llm/model_router.py`, `gateway.py`: gemessen nur mit passendem Digest und allen geforderten Aufgabenscores; sonst MANUAL_DEFAULT | zwei Multiskillregressionen in `tests/unit/test_model_routing.py` | IMPLEMENTED_AND_TESTED für Routingvertrag; empirische Modellfähigkeiten fehlen |
+| SEM-4 / OFF-3,4, G15,G17,G22 | `assessments/ai_review.py`, geschützte Workflow-Provenance und `frontend/assessment_review.py`: Pflichtcoverage zuerst, exakte Planbelege, Embargo und menschliche Klärung | PDF-/Humanreview-/UI-Integration und alle bisherigen Embargotests | IMPLEMENTED_AND_TESTED mit synthetischen Daten; Ablage weiter flüchtig |
+| SEM-5 / OFF-5, G07,G26,G27 | `evaluation/lab.py`, `metrics.py`, `academic_benchmark.py`: fair getrennte A/B/C-Planungsbedingungen, acht Korpusfälle, Referenzschnittstelle für Planrelevanz | Zwei-PDF-Vergleich mit zwölf Mockdurchläufen; Referenz-/Incomplete-Tests | technische Evaluation IMPLEMENTED_AND_TESTED; Fachqualität BLOCKED_BY_EXTERNAL_REQUIREMENTS |
+
+Abschlusslauf: **699 Tests, 87,37 % kombinierte Coverage**, unveränderte 80-%-Grenze.
+Frühere Tabellen/Testzahlen sind historische Stände der dort verlinkten Erweiterungen.
+
 ## Post-Audit Remediation, 27.11.2026
 
 Maßgeblicher neuer Arbeitsstand: [Phasenbericht und Abnahmegrenzen](../remediation/2026-11-27-remediation.md),

@@ -29,7 +29,13 @@ class DemoProvider:
             return Completion(text="MOCK: synthetischer Verbindungstest.", model=model.name)
         properties = output_schema["properties"]
         payload = json.loads(messages[-1]["content"])
-        if "observations" in properties:
+        if "understanding" in properties:
+            data = {
+                "understanding": {},
+                "agents": [],
+                "rationale": "MOCK: Keine semantische Analyse oder fachliche Aussage.",
+            }
+        elif "observations" in properties:
             data = {
                 "observations": [
                     {

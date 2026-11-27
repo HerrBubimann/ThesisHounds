@@ -10,12 +10,32 @@ Die drei ausgelieferten PA1/PA2/BA-Profile bleiben **inoffizielle Beispiele** mi
 höchstens sechs Kriterien. Ein offizieller Detailkatalog wurde nicht bereitgestellt.
 Das System behauptet keine vollständige Abdeckung realer DHBW-Kataloge.
 
-Die vorhandene AgentFactory/AgentRegistry erzeugt zusätzlich höchstens zwei
-themenspezifische Spezialisten aus festen Templates: Statistik, Experteninterviews,
-Machine Learning, Softwarearchitektur und Literaturreview. Arbeitstyp, verfügbare
-Kriterien und lokale Textsignale bestimmen die Auswahl. Dies ist eine kontrollierte
-Heuristik, kein nachgewiesener semantischer Methodenklassifikator. Neue Tools,
-Netzziele, Programme oder Berechtigungen können dadurch nicht entstehen.
+Seit der semantischen Erweiterung vom 27.11.2026 ist `adaptive_planning_mode: semantic`
+der Standard für Zusatzplanung im bestehenden Assessmentpfad D/E. Ein Aufruf des
+autorisierten lokalen Providers schlägt strukturierte Methodeneinordnungen und
+begründete Prüfaufträge vor. APPLIED, MENTIONED und UNCLEAR sind getrennte Zustände.
+Nur an Originalspannen gebundene APPLIED-Verfahren dürfen einen Spezialisten
+begründen. Freie fachliche Namen und Aufgaben werden in bestehende, servervalidierte
+AgentSpecs übersetzt; Modellwahl, Kategorien und Rechte bleiben serverseitig.
+Null zusätzliche Agenten ist ein gültiges Planungsergebnis.
+
+`regex_baseline` erhält die früheren fünf Templates ausdrücklich als Vergleich.
+`off` deaktiviert Zusatzplanung. Ein automatischer Regex-Fallback ist standardmäßig
+ausgeschaltet; optionaler Fallback bei 503/504 wird als nicht semantisch markiert.
+Schema-/Scope-/Privacyfehler aktivieren keinen Fallback. Die Standardoberfläche
+verwendet weiterhin einen Mockprovider; dieser liefert keine behauptete echte
+Methodenerkennung. Reale Modellfreigaben, Pilotkatalog und Qualitätsnachweise fehlen.
+
+Pro Plan gelten standardmäßig höchstens zwei Vorschläge sowie die bestehenden
+Gesamtquoten, Delegationstiefe und ein gemeinsames Aufruf-/Tokenbudget. Der Server
+prüft Criterion- und Methodenzuordnung, tatsächlich übermittelten Kontext,
+Originalzitate, doppelte Aufgaben, Werkzeuge und begrenzte Laufzeit-/Kontext-/
+Ausgabebudgets. Der Aufruf erfolgt über vorhandenen Router/Gateway und die
+Ausführung über vorhandene Factory/Registry/ExecutionEngine. Neue Tools, Netzziele,
+Programme oder eigenständige Berechtigungserweiterungen entstehen nicht.
+
+Vollständiger Vertrag, Reproduktion, A/B/C-Planungsvergleich und Ausführungsgrenzen:
+[Semantische adaptive Planung](semantic_adaptive_planning.md).
 
 Eltern und Kinder teilen Analyse, Schutzklasse und Dokumentzuweisung. Modell- und
 Toolrechte sind Teilmengen; die vorhandenen Quoten und Timeouts bleiben wirksam.

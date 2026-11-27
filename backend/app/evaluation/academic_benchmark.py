@@ -73,12 +73,22 @@ def synthetic_pdf(text: str) -> bytes:
     return output.getvalue()
 
 
-def generate_pilot_corpus(root: Path) -> dict:
+PLANNING_CASES = {
+    "mentioned-methods-only": "Neuronale Netze werden nur im Ausblick erwaehnt "
+    "und hier nicht eingesetzt. "
+    "Die Arbeit beschreibt ausschliesslich die Grenzen einer einzelnen Fallbeschreibung.",
+    "applied-without-keywords": "Wir teilten zwoelf gleiche Pruefkoerper per Los "
+    "auf zwei Gruppen auf. "
+    "Nur die erste Gruppe wurde erhitzt. Danach verglichen wir die Bruchlast beider Gruppen.",
+}
+
+
+def generate_pilot_corpus(root: Path, *, include_planning_cases=False) -> dict:
     root = checked_pilot_root(root)
     if root.exists() and any(root.iterdir()):
         raise ValueError("CORPUS_REQUIRES_NEW_EMPTY_DIRECTORY")
     rows = []
-    for key, text in PILOT_CASES.items():
+    for key, text in (PILOT_CASES | (PLANNING_CASES if include_planning_cases else {})).items():
         data = synthetic_pdf(text)
         try:
             document_id = register_pilot_pdf(
@@ -105,7 +115,7 @@ def generate_pilot_corpus(root: Path) -> dict:
             )
     return {
         "kind": "SYNTHETIC_PILOT_CORPUS",
-        "version": 1,
+        "version": 2 if include_planning_cases else 1,
         "cases": rows,
         "expert_validated": False,
         "quality_labels": None,
@@ -255,9 +265,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("reports/academic-benchmark.json"))
     parser.add_argument("--pilot-corpus-dir", type=Path)
+    parser.add_argument("--planning-cases", action="store_true")
     args = parser.parse_args()
     report = (
-        generate_pilot_corpus(args.pilot_corpus_dir) if args.pilot_corpus_dir else run_benchmarks()
+        generate_pilot_corpus(args.pilot_corpus_dir, include_planning_cases=args.planning_cases)
+        if args.pilot_corpus_dir
+        else run_benchmarks()
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")

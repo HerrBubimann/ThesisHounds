@@ -49,6 +49,7 @@ class AgentStatus(StrEnum):
 
 
 class AgentRecord(BaseModel):
+    owner_subject: str = ""
     agent_id: str
     run_id: str
     name: str

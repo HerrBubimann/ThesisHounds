@@ -9,8 +9,10 @@ from app.core.configuration import ExecutionLimits
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
 from app.schemas.domain import AgentRecord, AgentStatus
+from app.security.access_control import principal
 from app.security.classification import combine
 from app.security.information_flow import InformationLabel
+from app.security.tool_permissions import ToolInvocation, authorize_tool_call, current_agent
 from app.services.document_store import Document
 
 T = TypeVar("T", bound=BaseModel)
@@ -28,12 +30,21 @@ class ExecutionEngine:
         *,
         runtime_limit: float | None = None,
     ) -> T:
+        if (
+            self.registry.records.get(record.agent_id) is not record
+            or record.owner_subject != principal().subject
+        ):
+            raise LLMError(403, "AGENT_EXECUTION_OWNER_DENIED")
         self.registry.transition(record, AgentStatus.QUEUED)
         try:
             async with self.slots:
                 self.registry.transition(record, AgentStatus.RUNNING)
                 async with asyncio.timeout(runtime_limit or self.limits.agent_timeout_seconds):
-                    result = await operation()
+                    token = current_agent.set(record)
+                    try:
+                        result = await operation()
+                    finally:
+                        current_agent.reset(token)
                 self.registry.transition(record, AgentStatus.COMPLETED)
                 record.result_status = "OUTPUT_VALIDATED"
                 return result
@@ -73,6 +84,20 @@ class ExecutionEngine:
             raise LLMError(403, "AGENT_SCOPE_DENIED")
 
         attempts = min(iterations, self.limits.max_iterations, self.limits.max_retries + 1)
+        authorize_tool_call(
+            ToolInvocation(
+                agent_id=record.agent_id,
+                analysis_id=record.run_id,
+                document_id=document.document_id,
+                tool_id="document.read",
+                purpose=purpose,
+            ),
+            self.registry,
+            record,
+            document,
+            budget,
+            self.limits,
+        )
         for attempt in range(attempts):
 
             def started():

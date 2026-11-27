@@ -55,6 +55,7 @@ class RoutingDecision(BaseModel):
     reason: str
     evidence_id: str | None = None
     resources_verified: bool = False
+    required_tasks: tuple[TaskType, ...] = ()
 
 
 class ModelRouter:
@@ -77,6 +78,7 @@ class ModelRouter:
         *,
         resources: ResourceBudget | None = None,
         exclude_manufacturers: frozenset[str] = frozenset(),
+        required_tasks: tuple[TaskType, ...] = (),
     ) -> RoutingDecision:
         resources = resources or ResourceBudget()
         candidates = []
@@ -108,13 +110,18 @@ class ModelRouter:
                     record.model_id == model.id
                     and record.model_digest == available[model.name]
                     and not record.mocked
-                    and task in record.scores
+                    and {task, *required_tasks} <= record.scores.keys()
                 ):
-                    scored.append((record.scores[task], model.id, record))
+                    scored.append(
+                        (min(record.scores[t] for t in {task, *required_tasks}), model.id, record)
+                    )
         if scored:
             _, model_id, evidence = sorted(scored, key=lambda x: (-x[0], x[1]))[0]
             model = next(m for m in candidates if m.id == model_id)
-            source, reason = "MEASURED", "Reviewed benchmark for this task and exact model digest"
+            source, reason = (
+                "MEASURED",
+                "Reviewed benchmark for every required task and exact digest",
+            )
         else:
             model = next(
                 (m for m in candidates if m.id == manual_default),
@@ -134,4 +141,5 @@ class ModelRouter:
             reason=reason,
             evidence_id=evidence.evidence_id if evidence else None,
             resources_verified=resources.source == "INFERENCE_HOST_MEASURED",
+            required_tasks=required_tasks,
         )

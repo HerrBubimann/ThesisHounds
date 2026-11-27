@@ -1,5 +1,41 @@
 # Risk register
 
+## Document Security, 27.11.2026
+
+Qualitative Einschätzung, vorgeschlagene Rollen, keine erteilte Risikoannahme.
+[Prüfnachweise](../evaluation/security_results.md) beziehen sich auf lokale
+synthetische Tests. Frühere Imagebefunde weiter unten sind historische Scans;
+ein aktueller Docker-/Trivy-Lauf wurde hier nicht ausgeführt.
+
+| ID / Priorität | Risiko / Einstufung Wahrscheinlichkeit–Schaden | Kontrolle / konkreter Nachweis | Offen / vorgeschlagener Owner |
+|---|---|---|---|
+| DOC-R1 / P0 | native Parser-Codeausführung / M–H | begrenzter Worker, aktive Inhalte gesperrt; `test_secure_document_gateway.py` | OS-Sandbox mit technisch gesperrtem Egress, read-only Mounts und zielhostspezifischem Escape-/Netztest / IT+Security |
+| DOC-R2 / P0 | Modell fordert fremde Dokumente/Tools / H–H | Registry-/Factory-Owner, Engine-Kontext, Gateway und Firewall; Scope-/Parameter-/Akteurregressionen | Änderungen an allen künftigen Callpfaden erneut prüfen; Backendkompromiss außerhalb Grenze / Backend+Security |
+| DOC-R3 / P0 | gefälschter Katalog-/Inspektionsstand / M–H | Original-/Text-/Inspektionshash, neue Preflightversion erforderlich | Hash kein Signaturnachweis; Operator-/NTFS-ACL/verschlüsselter Store abnehmen / Betrieb |
+| DOC-R4 / P1 | semantisch manipulierte, formal gültige Befunde / H–H | Pflichtcoverage, Originalbelege, Gegenprüfung und Human-Finale | echte DE/EN-Modelle/Expertenlabels fehlen; Modellkonsens kann falsch sein / Fachbetreuung |
+| DOC-R5 / P1 | Bild-/OCR-/Layoutinjektion unentdeckt / H–H | einzelne Layoutindikatoren, weiterhin feste Rechte und PUBLIC-only | lokaler Raster-/OCR-Vergleich, Bildkorpus und Fehlalarmprüfung fehlen / Document Engineering |
+| DOC-R6 / P1 | Fehlalarm/Bias bei legitimer Sicherheitsarbeit / M–H | Beispielkontext, neutrale Verdachtsanzeige nach Erstreview, keine Notenautomatik | Angreifer missbrauchen Beispielkontext; zwei Heuristikmisses dokumentiert; Bedienungsstudie / HAI+Gutachter |
+| DOC-R7 / P1 | Klassifikator unsicher/veraltet/falsch kalibriert / M–H | optional und aus, Freigabe-/Digestgate, unbekannt führt zu Review | Modellrevision/Lizenz/Herkunft/Hardware/DE-FPR-FNR fehlen; ProtectAI-Kandidat archiviert / Modellsteward |
+| DOC-R8 / P2 | Mockmetrik als empirischer Sicherheitsbeweis / M–H | real-ASR null, D nicht ausgeführt, paired Memory-Benchmark und separate echte PDFtests | repräsentativer gepaarter PDF-/Bildkorpus, Wiederholungen, echte Modelle/Hostmessung / Evaluation |
+| DOC-R9 / P0 | Berichtüberlauf ermöglicht unvollständige Freigabe / M–M | kombinierter Befunddeckel mit BLOCKED, Regression für Text+Metadaten | Verarbeitung nach fachlich/technischer Einzelfallprüfung separat neu vorbereiten; Original erhalten / Backend |
+
+### Reihenfolge bis zu den Präsentationen
+
+Bis **15.12.2026** zuerst überprüfbare Zielhost-/Worker-Netzisolation und erneute
+Docker-/Imagescans; parallel fachlich bestätigten PA1-Experimentkatalog und
+freigegebene lokale Modellartefakte beschaffen. Danach einen kontrollierten
+PUBLIC-PDF→Human-Erstreview→lokale KI→Gegenprüfung→Human-Finale-Lauf mit
+Originalhash/Provenance und realen Messwerten zeigen. Ohne die Freigaben bleibt
+die Präsentation explizit ein synthetischer Demonstrator mit offenen Blockern.
+
+Vom **16.12.2026 bis 25.01.2027** zuerst gepaarte Evaluation und Expertenreferenz
+abschließen; dann bei vertretbarem Aufwand isoliertes Rendering/OCR und einen
+geprüften Klassifikator evaluieren. Vor **25.01.2027** Grenzen/Fehlschläge,
+Ressourcen- und Qualitätsdaten reproduzieren und Ergebnisse einfrieren.
+Private Produktivverarbeitung setzt zusätzlich SSO, Rechts-/Datenschutz-,
+Speicher-/Backup- und Infrastrukturabnahme voraus. Diese Termine sind eine
+priorisierte Arbeitsplanung, keine zugesagte oder bereits erfolgte Freigabe.
+
 ## Erneutes Hardening, 27.11.2026
 
 Vorgeschlagene Verantwortlichkeiten, keine erklärte Risikoannahme. Die konkreten

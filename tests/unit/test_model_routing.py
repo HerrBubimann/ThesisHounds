@@ -95,3 +95,29 @@ def test_ambiguous_or_invalid_evidence_is_rejected():
     for records in ([evidence(), evidence()], [evidence(scores={"argumentation": float("nan")})]):
         with pytest.raises(ValueError):
             router(records)
+
+
+def test_partial_skill_evidence_does_not_claim_measured_multiskill_routing():
+    selection, available = router([evidence(scores={"methodology": 1.0})])
+    result = selection.select(
+        "methodology",
+        "specialist",
+        "PUBLIC",
+        available,
+        "mistral",
+        required_tasks=("methodology", "evidence"),
+    )
+    assert result.source == "MANUAL_DEFAULT" and result.model_id == "mistral"
+
+
+def test_multiskill_routing_requires_measurements_for_every_requested_task():
+    selection, available = router([evidence(scores={"methodology": 0.8, "evidence": 0.7})])
+    result = selection.select(
+        "methodology",
+        "specialist",
+        "PUBLIC",
+        available,
+        "mistral",
+        required_tasks=("methodology", "evidence"),
+    )
+    assert result.source == "MEASURED" and result.model_id == "llama"

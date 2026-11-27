@@ -236,7 +236,7 @@ def test_failed_optional_agent_keeps_mandatory_results_and_human_escalation():
                 return Completion(model=args[0].name, text="INVALID_SYNTHETIC_JSON")
             return await super().complete(*args, **kwargs)
 
-    findings, budget = run_review(FailedSupplement())
+    findings, budget = run_review(FailedSupplement(), planning_mode="regex_baseline")
     assert len(findings) == 3
     method = next(f for f in findings if f.criterion_id == "methodology")
     assert not method.supplemental and method.escalation["human_required"]
@@ -256,7 +256,9 @@ def test_subagent_limit_is_explicit_and_does_not_drop_mandatory_criteria():
     )
     profile = ProfileRegistry(CONFIG / "assessment_profiles").get("pa1-example", "PA1")
     findings = asyncio.run(
-        AISecondReviewer(gateway, config).review("scope", document, profile, CallBudget(32, 100000))
+        AISecondReviewer(gateway, config).review(
+            "scope", document, profile, CallBudget(32, 100000), planning_mode="regex_baseline"
+        )
     )
     assert len(findings) == 3 and sum(len(f.supplemental) for f in findings) == 1
     assert any(

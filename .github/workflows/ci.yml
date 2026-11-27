@@ -216,6 +216,7 @@ jobs:
         run: |
           python -m app.evaluation.privacy_lab --output reports/privacy-ablation.json
           python -m app.evaluation.academic_benchmark --output reports/academic-benchmark.json
+          python -m app.evaluation.injection_benchmark --output reports/injection-benchmark.json
           python -m app.evaluation.lab --all-variations --repeats 1 --output-dir reports/advanced-fairness
           python -m app.evaluation.lab --all-ablations --repeats 1 --output-dir reports/advanced-ablation
       - name: Check generated artifacts for synthetic leakage canaries
@@ -226,7 +227,9 @@ jobs:
         if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: privacy-security-report
-          path: reports/junit-privacy.xml
+          path: |
+            reports/junit-privacy.xml
+            reports/injection-benchmark.json
           retention-days: ${{ env.RETENTION_DAYS }}
           if-no-files-found: error
 

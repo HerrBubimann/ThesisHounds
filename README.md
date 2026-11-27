@@ -1,5 +1,26 @@
 # ThesisHounds
 
+**Document Security, 27.11.2026:** Der bestehende PDF-Eingang, Agenten-/Modellaufrufe
+und der menschliche Review sind zusätzlich abgesichert. **737 Tests bestanden,
+87,02 % kombinierte Coverage**. Quarantäne, serverseitige Tool-/Scopekontrollen
+und neutrale Sicherheitsentscheidungen sind mit synthetischen Daten geprüft.
+Echte Modellinferenz, vollständige OS-Workerisolation und Rendering/OCR sind
+weiter offen; private Produktion bleibt gesperrt.
+[Sicherheitsarchitektur](docs/security/prompt_injection.md) ·
+[PDF-Grenzen](docs/security/pdf_security.md) ·
+[Prüfprotokoll](docs/evaluation/security_results.md) ·
+[Requirements-Matrix](docs/requirements/traceability.md).
+Frühere Zahlen und Berichte darunter sind historische Stände; die aktuell
+fehlenden Audit-/Remediation-Markdown-Dateien sind keine neuen Abnahmebelege.
+
+**Semantische adaptive Planung 27.11.2026:** Der vorhandene Assessmentpfad kann
+strukturierte lokale LLM-Pläne mit Methodengebrauch, freien Spezialistenaufgaben,
+Kriterienbindung und Originalbelegen validieren. Regex bleibt eine explizite Baseline;
+der Standardprovider simuliert weiterhin. **699 Tests, 87,37 % Coverage**.
+Reale Modellqualität und notwendige Modell-/Katalogfreigaben bleiben offen.
+[Architektur und A/B/C-Vergleich](docs/architecture/semantic_adaptive_planning.md) ·
+[Prüfnachweise](docs/evaluation/semantic_planning_results.md).
+
 **Post-Audit Remediation 27.11.2026:** Der kontrollierte PDF-Pfad ist mit dem
 bestehenden AssessmentWorkflow und Ollama-Adapter verbunden. **672 Tests, 87,30 %
 Coverage**; positive Modellantworten im Nachweis bleiben simuliert. Der reale

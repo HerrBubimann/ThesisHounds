@@ -5,7 +5,7 @@ import json
 import time
 from typing import Literal
 
-from app.agents.adaptive_assessment import adaptive_specs, create_adaptive_agent
+from app.agents.adaptive_assessment import PlanningMode, create_adaptive_agent, plan_specialists
 from app.agents.agent_factory import AgentFactory
 from app.agents.agent_registry import AgentRegistry
 from app.assessments.adversarial_verification import ground_finding, verify_finding
@@ -22,6 +22,7 @@ from app.llm.providers.ollama import OllamaProvider
 from app.monitoring.resources import sample_resources
 from app.schemas.domain import StrictModel
 from app.security.classification import combine
+from app.security.document_security import inspect_document
 from app.security.information_flow import InformationLabel
 from app.services.context_management import LocalContextIndex
 from app.services.document_intelligence import structure_document
@@ -64,7 +65,20 @@ class AISecondReviewer:
         self.gateway, self.config = gateway, config
 
     async def _observe(
-        self, criterion, document, structure, budget, route, *, focus="", index=None, retrieval=True
+        self,
+        criterion,
+        document,
+        structure,
+        budget,
+        route,
+        *,
+        focus="",
+        index=None,
+        retrieval=True,
+        max_tokens=768,
+        max_attempts=None,
+        context_bytes=None,
+        allowed_pages=None,
     ):
         index = index or LocalContextIndex(document)
         if (index.analysis_id, index.document_id) != (document.analysis_id, document.document_id):
@@ -94,11 +108,22 @@ class AISecondReviewer:
 
         messages, trace = index.fit(
             builder,
-            " ".join([criterion.description, criterion.expected_evidence, focus]),
+            " ".join(
+                [
+                    criterion.description,
+                    criterion.expected_evidence,
+                    json.dumps(focus, ensure_ascii=False) if isinstance(focus, dict) else focus,
+                ]
+            ),
             model=model,
             output_type=AIObservation,
             category=criterion.category,
-            max_bytes=self.config.limits.max_context_bytes,
+            max_tokens=max_tokens,
+            allowed_pages=allowed_pages,
+            max_bytes=min(
+                context_bytes or self.config.limits.max_context_bytes,
+                self.config.limits.max_context_bytes,
+            ),
             retrieval=retrieval,
         )
         if trace["empty"]:
@@ -129,7 +154,11 @@ class AISecondReviewer:
             budget.calls,
             budget.observed_tokens,
         )
-        for attempt in range(self.config.limits.max_retries + 1):
+        attempt_limit = min(
+            max_attempts or self.config.limits.max_retries + 1,
+            self.config.limits.max_retries + 1,
+        )
+        for attempt in range(attempt_limit):
             try:
                 async with asyncio.timeout(self.config.limits.agent_timeout_seconds):
                     response, observation = await self.gateway.complete(
@@ -139,7 +168,7 @@ class AISecondReviewer:
                         messages,
                         budget,
                         output_type=AIObservation,
-                        max_tokens=768,
+                        max_tokens=max_tokens,
                         label=InformationLabel(
                             document.classification,
                             document.analysis_id,
@@ -149,7 +178,7 @@ class AISecondReviewer:
                 break
             except (LLMError, TimeoutError) as exc:
                 code = exc.status_code if isinstance(exc, LLMError) else 504
-                if code not in {502, 503, 504} or attempt >= self.config.limits.max_retries:
+                if code not in {502, 503, 504} or attempt + 1 >= attempt_limit:
                     raise LLMError(code, "CRITERION_ANALYSIS_FAILED") from None
         performance = {
             "duration_seconds": time.monotonic() - started,
@@ -242,6 +271,7 @@ class AISecondReviewer:
         retrieval: bool = True,
         dynamic: bool = True,
         verification: bool = True,
+        planning_mode: PlanningMode | None = None,
     ) -> list[AssessmentFinding]:
         if document.analysis_id != assessment_id:
             raise LLMError(403, "ASSESSMENT_DOCUMENT_SCOPE_DENIED")
@@ -347,6 +377,10 @@ class AISecondReviewer:
                 )
         if not check_coverage(profile, findings).complete:
             raise LLMError(502, "INCOMPLETE_MANDATORY_COVERAGE")
+        if all(f.judgment == "POSITIVE" for f in findings) and inspect_document(document).findings:
+            for finding in findings:
+                finding.open_questions.append("SECURITY_CONTEXT_UNIFORM_POSITIVE_REQUIRES_HUMAN")
+                finding.escalation = plan_escalation(finding)
         for finding in findings:
             if finding.claim_type == "ABSENCE":
                 expanded = index.search(
@@ -362,12 +396,47 @@ class AISecondReviewer:
             for finding in findings:
                 finding.provenance["model_parameters"]["num_predict"] = 1024
                 finding.provenance["prompt_version"] = "simple-batch.v2"
-        if architecture in {"D", "E"} and dynamic:
+        mode = planning_mode or self.config.limits.adaptive_planning_mode
+        if mode not in {"off", "regex_baseline", "semantic"}:
+            raise LLMError(422, "UNKNOWN_ADAPTIVE_PLANNING_MODE")
+        if architecture in {"D", "E"} and dynamic and mode != "off":
             registry = AgentRegistry(self.config.limits)
             factory = AgentFactory(self.config, registry)
             engine = ExecutionEngine(self.gateway, registry, self.config.limits)
-            for template in adaptive_specs(document, profile):
-                criterion = next(c for c in profile.criteria if c.category == template["category"])
+            # A sound mandatory review needs no extra planning call. This decision is
+            # based on grounded review states, not the presence of topic keywords.
+            if architecture == "E" and not any(
+                plan_escalation(f, complex_topic=True)["specialist_needed"] for f in findings
+            ):
+                planning = {"mode": mode, "status": "NOT_NEEDED_BY_REVIEW", "proposals": []}
+            else:
+                planning = await plan_specialists(
+                    self.gateway,
+                    self.config,
+                    document,
+                    profile,
+                    budget,
+                    index,
+                    available,
+                    mode=mode,
+                )
+            findings[0].provenance["adaptive_planning"] = planning
+            planning["execution"] = []
+            findings[0].performance["planning_model_calls"] = planning.get("model_calls", 0)
+            findings[0].performance["planning_seconds"] = planning.get("duration_seconds", 0)
+            if planning["status"].endswith("REQUIRES_HUMAN"):
+                findings[0].open_questions.append("ADAPTIVE_PLANNING_FAILED_REQUIRES_HUMAN")
+                findings[0].escalation.update(level=4, human_required=True)
+            for template in planning["proposals"]:
+                criterion = next(
+                    c
+                    for c in profile.criteria
+                    if (
+                        c.id == template["criterion_id"]
+                        if "criterion_id" in template
+                        else c.category == template["category"]
+                    )
+                )
                 primary = next(f for f in findings if f.criterion_id == criterion.id)
                 if architecture == "E":
                     primary.escalation = plan_escalation(
@@ -385,17 +454,25 @@ class AISecondReviewer:
                     if registry.remaining_specialists(assessment_id) == 0:
                         raise LLMError(429, "SUBAGENT_LIMIT")
                     route = await self.gateway.route(
-                        TASKS[criterion.category],
+                        template.get("required_capabilities", [TASKS[criterion.category]])[0],
                         "specialist",
                         document.classification,
                         assignments[criterion.category],
                         available=available,
                         resources=self.config.resource_budget,
+                        required_tasks=tuple(template.get("required_capabilities", [])),
                     )
                     model = self.gateway.registry.get(route.model_id)
                     agent = create_adaptive_agent(
                         factory, document, profile, template, model.id, model.manufacturer
                     )
+                    execution = {
+                        "agent_id": agent.agent_id,
+                        "proposal_key": template["key"],
+                        "specification": agent.specification.model_dump(),
+                        "status": "CREATED",
+                    }
+                    planning["execution"].append(execution)
                 except LLMError as exc:
                     primary.open_questions.append(
                         "SUPPLEMENT_FAILED_REQUIRES_HUMAN:" + str(exc.status_code)
@@ -404,21 +481,31 @@ class AISecondReviewer:
                     continue
 
                 async def operation(criterion=criterion, route=route, template=template):
+                    limits = template.get("budget", {})
                     return await self._observe(
                         criterion,
                         document,
                         structure,
                         budget,
                         route,
-                        focus=template["name"],
+                        focus=template if "criterion_id" in template else template["name"],
                         index=index,
                         retrieval=retrieval,
+                        max_attempts=limits.get("max_model_calls"),
+                        max_tokens=limits.get("max_output_tokens", 768),
+                        context_bytes=limits.get("max_context_bytes"),
+                        allowed_pages={r["page"] for r in template["resolved_evidence"]}
+                        if "resolved_evidence" in template
+                        else None,
                     )
 
                 supplement_started, supplement_calls = time.monotonic(), budget.calls
                 try:
-                    observation, trace, performance = await engine.execute(agent, operation)
+                    observation, trace, performance = await engine.execute(
+                        agent, operation, runtime_limit=agent.specification.max_runtime_seconds
+                    )
                 except LLMError as exc:
+                    execution.update(status="FAILED", error_code=exc.status_code)
                     primary.open_questions.append(
                         "SUPPLEMENT_FAILED_REQUIRES_HUMAN:" + str(exc.status_code)
                     )
@@ -434,6 +521,7 @@ class AISecondReviewer:
                         - supplement_started
                     )
                     continue
+                execution.update(status="COMPLETED")
                 extra = self._finding(
                     observation,
                     criterion,
@@ -445,6 +533,12 @@ class AISecondReviewer:
                     trace=trace,
                     performance=performance,
                 )
+                extra.provenance["planning_mode"] = planning["mode"]
+                extra.provenance["specialist_specification"] = agent.specification.model_dump()
+                extra.provenance["specialist_mandate"] = template
+                extra.provenance["model_parameters"]["num_predict"] = template.get(
+                    "budget", {}
+                ).get("max_output_tokens", 768)
                 next(f for f in findings if f.criterion_id == criterion.id).supplemental.append(
                     extra
                 )
@@ -494,6 +588,7 @@ class AISecondReviewer:
                 sum(f.performance.get("model_calls", 0) for f in values)
                 + sum(r.get("model_calls", 0) for r in rounds)
                 + finding.performance.get("failed_supplement_calls", 0)
+                + finding.performance.get("planning_model_calls", 0)
             )
             finding.performance["criterion_active_seconds"] = (
                 sum(
@@ -503,5 +598,6 @@ class AISecondReviewer:
                 )
                 + sum(r.get("duration_seconds", 0) for r in rounds)
                 + finding.performance.get("failed_supplement_seconds", 0)
+                + finding.performance.get("planning_seconds", 0)
             )
         return findings

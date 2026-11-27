@@ -33,15 +33,37 @@ class Adjudication(StrictModel):
     source_correct: bool | None = None
 
 
+class SpecialistAdjudication(StrictModel):
+    proposal_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    relevant: bool
+    matched_specialist_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
 class HumanReferenceSet(StrictModel):
     dataset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     profile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     adjudicated_by: list[str] = Field(min_length=1, max_length=10)
     reference_ids: list[str]
     adjudications: list[Adjudication]
+    required_specialist_ids: list[str] | None = None
+    specialist_adjudications: list[SpecialistAdjudication] = Field(
+        default_factory=list, max_length=100
+    )
 
     @model_validator(mode="after")
     def unambiguous(self):
+        keys = [a.proposal_sha256 for a in self.specialist_adjudications]
+        if len(keys) != len(set(keys)) or (
+            self.required_specialist_ids is not None
+            and len(set(self.required_specialist_ids)) != len(self.required_specialist_ids)
+        ):
+            raise ValueError("Duplicate specialist reference/adjudication")
+        if any(
+            not set(a.matched_specialist_ids) <= set(self.required_specialist_ids or [])
+            or (a.matched_specialist_ids and not a.relevant)
+            for a in self.specialist_adjudications
+        ):
+            raise ValueError("Invalid specialist adjudication")
         ids = [a.prediction_fingerprint for a in self.adjudications]
         if len(ids) != len(set(ids)) or len(self.reference_ids) != len(set(self.reference_ids)):
             raise ValueError("Duplicate reference/adjudication")
@@ -52,6 +74,34 @@ class HumanReferenceSet(StrictModel):
         if any(a.matched_reference_ids and not a.correct for a in self.adjudications):
             raise ValueError("An incorrect prediction cannot recover a reference finding")
         return self
+
+
+def planning_metrics(planning, reference):
+    proposals = planning.get("proposals", [])
+    execution = planning.get("execution", [])
+    result = {
+        "proposed_specialists": len(proposals),
+        "created_specialists": len(execution),
+        "completed_specialists": sum(e["status"] == "COMPLETED" for e in execution),
+        "specialist_relevance": None,
+        "unnecessary_specialists": None,
+        "missing_necessary_specialists": None,
+        "planning_reference_status": "NO_HUMAN_PLANNING_REFERENCES",
+    }
+    if reference is None or reference.required_specialist_ids is None:
+        return result
+    annotations = {a.proposal_sha256: a for a in reference.specialist_adjudications}
+    if any(digest(p) not in annotations for p in proposals):
+        return {**result, "planning_reference_status": "INCOMPLETE_HUMAN_PLANNING_ADJUDICATION"}
+    values = [annotations[digest(p)] for p in proposals]
+    matched = {key for a in values if a.relevant for key in a.matched_specialist_ids}
+    return {
+        **result,
+        "planning_reference_status": "HUMAN_ADJUDICATED",
+        "specialist_relevance": sum(a.relevant for a in values) / len(values) if values else None,
+        "unnecessary_specialists": sum(not a.relevant for a in values),
+        "missing_necessary_specialists": len(set(reference.required_specialist_ids) - matched),
+    }
 
 
 def quality_metrics(
@@ -102,11 +152,14 @@ def consistency(rows: list[dict]) -> list[dict]:
             r.get("ablation", "baseline"),
             r.get("dataset_sha256", "UNKNOWN"),
             r.get("profile_sha256", "UNKNOWN"),
+            r.get("planning_variant") or "DEFAULT",
         )
         for r in rows
         if r["status"] == "COMPLETED"
     }
-    for architecture, variation, ablation, dataset_hash, profile_hash in sorted(groups):
+    for architecture, variation, ablation, dataset_hash, profile_hash, planning_variant in sorted(
+        groups
+    ):
         selected = [
             r
             for r in rows
@@ -115,6 +168,7 @@ def consistency(rows: list[dict]) -> list[dict]:
             and r.get("ablation", "baseline") == ablation
             and r.get("dataset_sha256", "UNKNOWN") == dataset_hash
             and r.get("profile_sha256", "UNKNOWN") == profile_hash
+            and (r.get("planning_variant") or "DEFAULT") == planning_variant
         ]
         pairs = []
         for first, second in combinations(selected, 2):
@@ -137,6 +191,7 @@ def consistency(rows: list[dict]) -> list[dict]:
         results.append(
             {
                 "architecture": architecture,
+                "planning_variant": planning_variant,
                 "dataset_sha256": dataset_hash,
                 "profile_sha256": profile_hash,
                 "variation": variation,
@@ -158,6 +213,7 @@ def variation_comparisons(rows: list[dict]) -> list[dict]:
                 b
                 for b in rows
                 if b["architecture"] == row["architecture"]
+                and b.get("planning_variant") == row.get("planning_variant")
                 and b.get("document_id") == row.get("document_id")
                 and b["variation"] == "baseline"
                 and b["repeat"] == row["repeat"]
@@ -232,6 +288,7 @@ def ablation_comparisons(rows):
                     b["status"],
                 )
                 == (row["architecture"], row["variation"], row["repeat"], "baseline", "COMPLETED")
+                and b.get("planning_variant") == row.get("planning_variant")
                 and b.get("document_id") == row.get("document_id")
             ),
             None,

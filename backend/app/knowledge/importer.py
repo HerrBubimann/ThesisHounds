@@ -13,11 +13,11 @@ from xml.etree.ElementTree import ParseError
 import yaml
 from defusedxml import ElementTree
 from defusedxml.common import DefusedXmlException
-from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
 from app.knowledge.schemas import SourceDocument
 from app.security.classification import Classification, classify
+from app.services.pdf_security import extract_pdf_subprocess
 
 MAX_BYTES = 8_000_000
 MAX_EXPANDED = 24_000_000
@@ -81,27 +81,14 @@ def _extract_candidate(data: bytes, suffix: str) -> dict:
     if suffix == ".pdf":
         if not data.startswith(b"%PDF-"):
             raise ImportRejected("FILE_TYPE_MISMATCH")
-        reader = PdfReader(io.BytesIO(data), strict=True)
-        if reader.is_encrypted or len(reader.pages) > 200:
-            raise ImportRejected("PDF_ENCRYPTED_OR_TOO_MANY_PAGES")
-        # Nothing is rendered or executed. Even dormant active content is refused.
-        for obj in reader.root_object.values():
-            if isinstance(obj, str) and obj in {"/JavaScript", "/Launch"}:
-                raise ImportRejected("PDF_ACTIVE_CONTENT")
-        root = reader.root_object
-        if (
-            "/OpenAction" in root
-            or "/AA" in root
-            or any(key in root.get("/Names", {}) for key in ("/EmbeddedFiles", "/JavaScript"))
-        ):
-            raise ImportRejected("PDF_ACTIVE_CONTENT")
-        pages = {}
-        for number, page in enumerate(reader.pages, 1):
-            if "/AA" in page or "/Annots" in page:
-                warnings.append("ANNOTATIONS_NOT_EXECUTED_OR_VALIDATED")
-            pages[number] = page.extract_text() or ""
-            if sum(map(len, pages.values())) > MAX_EXPANDED:
-                raise ImportRejected("EXTRACTED_TEXT_LIMIT")
+        try:
+            extracted = extract_pdf_subprocess(data, allow_empty_candidate=True)
+        except ValueError as exc:
+            if str(exc) in {"PDF_ACTIVE_CONTENT", "PDF_ENCRYPTED"}:
+                raise ImportRejected(str(exc)) from None
+            raise
+        pages = {int(k): v for k, v in extracted["pages"].items()}
+        warnings.extend(extracted["warnings"])
         text = "\n".join(pages.values())
         warnings.append("TEXT_ONLY_NO_OCR_OR_LAYOUT_GUARANTEE")
     elif suffix in {".docx", ".dotx", ".xlsx"}:

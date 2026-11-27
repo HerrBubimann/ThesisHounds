@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -11,6 +12,12 @@ from app.security.policy_engine import PolicyConfig, PolicyEngine
 
 class ExecutionLimits(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    adaptive_planning_mode: Literal["off", "regex_baseline", "semantic"] = "semantic"
+    adaptive_planning_fallback: Literal["none", "regex_baseline"] = "none"
+    max_planned_specialists: int = Field(default=2, ge=1, le=6)
+    semantic_injection_model_id: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$"
+    )
     max_supervisors: int = Field(default=3, ge=1, le=3)
     max_dynamic_agents: int = Field(default=6, ge=1, le=32)
     max_parallel_agents: int = Field(default=2, ge=1, le=8)

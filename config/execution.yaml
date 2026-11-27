@@ -1,4 +1,7 @@
 max_supervisors: 3
+adaptive_planning_mode: semantic
+adaptive_planning_fallback: none
+max_planned_specialists: 2
 max_dynamic_agents: 6
 max_parallel_agents: 2
 max_parallel_model_calls: 1

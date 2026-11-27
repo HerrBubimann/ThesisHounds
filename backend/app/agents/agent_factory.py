@@ -4,6 +4,7 @@ from app.agents.agent_registry import AgentRegistry
 from app.core.configuration import RuntimeConfig
 from app.llm.errors import LLMError
 from app.schemas.domain import AgentRecord, AgentSpec
+from app.security.access_control import principal
 from app.security.tool_permissions import validate_tools
 
 
@@ -38,6 +39,8 @@ class AgentFactory:
         except ValidationError:
             raise LLMError(422, "Ungültige oder nicht freigegebene Agentenspezifikation.") from None
         limits = self.config.limits
+        if parent.owner_subject != principal().subject or "process" not in principal().permissions:
+            raise LLMError(403, "AGENT_PARENT_OWNER_DENIED")
         if self.registry.records.get(parent.agent_id) is not parent or not parent.can_delegate:
             raise LLMError(403, "Dieser Parent darf keine Agenten delegieren.")
         if parent.role not in {"content", "methodology", "formal"} or spec.category != parent.role:
