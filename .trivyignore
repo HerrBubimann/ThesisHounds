@@ -1,0 +1,13 @@
+# Documented Trivy exceptions. Currently: NONE.
+#
+# Every entry needs, directly above it, a comment with
+#   - affected image and package,
+#   - why it is not exploitable here or why no fix is available,
+#   - the reviewer who approved it (PR link),
+# and an expiry date so it is re-evaluated, e.g.:
+#
+#   # thesishounds/ollama: libfoo in upstream ollama/ollama base, no fixed release yet.
+#   # Not reachable: inference network is internal. Approved in PR #123.
+#   CVE-2026-00000 exp:2027-01-31
+#
+# Blanket rules (whole severities, packages or images) are not allowed.

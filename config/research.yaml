@@ -1,0 +1,6 @@
+# Design contract only; no provider implementation or egress permission in the MVP.
+public_enabled: false
+internal_scope: current_assessment_only
+approved_providers: []
+default_decision: DENY
+requires_human_query_approval: true

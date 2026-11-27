@@ -1,0 +1,10 @@
+# Use together with compose.yaml; CPU remains the default without this override.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

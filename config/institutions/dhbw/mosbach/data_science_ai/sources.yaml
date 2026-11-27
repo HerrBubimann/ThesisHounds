@@ -1,0 +1,300 @@
+# Öffentlich recherchierter Kandidat. KEINE Hochschulfreigabe. Keine erfundenen Gewichte.
+{
+  "sources": [
+    {
+      "id": "pa1-web-ds25",
+      "title": "Studiengangsseite: PA1 / DS25",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS25"
+      ],
+      "work_types": [
+        "PA1"
+      ],
+      "version": "Abruf 2026-11-26",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/studium/studienangebot-bachelor/data-science-kuenstliche-intelligenz/projekt-und-bachelorarbeiten/",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "af393b6d2de7a086f76fc984b5b18e0e22fcf711501861525231992531d0a412",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "pa1-bundle-ds25",
+      "title": "Offizielles Dokumentenpaket PA1 / DS25",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS25"
+      ],
+      "work_types": [
+        "PA1"
+      ],
+      "version": "Öffentliches Paket 2026",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/studiengaenge/ds/Unterlagen_Projektarbeit1_DS25.zip",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "dd7b73139eaaf876233068c5bdf28e67261d59a691ee71ce84493996d525b532",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "pa2-web-ds24",
+      "title": "Studiengangsseite: PA2 / DS24",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS24"
+      ],
+      "work_types": [
+        "PA2"
+      ],
+      "version": "Abruf 2026-11-26",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/studium/studienangebot-bachelor/data-science-kuenstliche-intelligenz/projekt-und-bachelorarbeiten/",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "af393b6d2de7a086f76fc984b5b18e0e22fcf711501861525231992531d0a412",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "pa2-bundle-ds24",
+      "title": "Offizielles Dokumentenpaket PA2 / DS24",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS24"
+      ],
+      "work_types": [
+        "PA2"
+      ],
+      "version": "Öffentliches Paket 2026",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/studiengaenge/ds/Unterlagen_Projektarbeit2_DS24.zip",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "365623e8031412c32320ff59620be163e61e356f4605fcf3adf756483e00ff09",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "ba-web-ds23",
+      "title": "Studiengangsseite: BA / DS23",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS23"
+      ],
+      "work_types": [
+        "BA"
+      ],
+      "version": "Abruf 2026-11-26",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/studium/studienangebot-bachelor/data-science-kuenstliche-intelligenz/projekt-und-bachelorarbeiten/",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "af393b6d2de7a086f76fc984b5b18e0e22fcf711501861525231992531d0a412",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "ba-bundle-ds23",
+      "title": "Offizielles Dokumentenpaket BA / DS23",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS23"
+      ],
+      "work_types": [
+        "BA"
+      ],
+      "version": "Öffentliches Paket 2026",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/studiengaenge/wi/bachelorarbeit/Unterlagen_Bachelorarbeit_DS23.zip",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "7463e01ede60309f17b037b443346d088ae7022b32ad5779c564287184f61d2e",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 1,
+      "availability": "RETRIEVED",
+      "notes": "Gültigkeit und jahrgangsbezogene Anwendbarkeit müssen durch die Hochschule bestätigt werden."
+    },
+    {
+      "id": "assessment-form-2023",
+      "title": "Gutachtenformular PA/BA 09.01.2023",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [
+        "DS23",
+        "DS24",
+        "DS25"
+      ],
+      "work_types": [
+        "PA1",
+        "PA2",
+        "BA"
+      ],
+      "version": "09.01.2023",
+      "published_at": "2023-01-09",
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/studiengaenge/ds/Unterlagen_Projektarbeit1_DS25.zip#Gutachtenformular_PA-BA_09.01.2023.dotx",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "d073a2dfe703f5d42d678315b70a8ecec76e441580f7f84a12be712ce3873ca9",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 2,
+      "availability": "RETRIEVED",
+      "notes": "Identische SHA-256 in allen drei öffentlichen Paketen. 4 Kategorien mit Maximalpunkten 20/40/30/10. Nicht als Palleduhn-Original identifiziert. Keine automatische Notenvergabe."
+    },
+    {
+      "id": "wi-box-palleduhn",
+      "title": "Referenzierte WI-Richtlinien / Palleduhn-Original noch bereitzustellen",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "data_science_ai"
+      ],
+      "cohorts": [],
+      "work_types": [
+        "PA1",
+        "PA2",
+        "BA"
+      ],
+      "version": "UNBESTÄTIGT",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://app.box.com/s/mcqho6icl8",
+      "retrieved_at": null,
+      "sha256": null,
+      "classification": "RESTRICTED",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 3,
+      "availability": "MANUAL_IMPORT_REQUIRED",
+      "notes": "Box-Link vom Browserwerkzeug nicht zugänglich. Keine Umgehung. Original und Freigabe fehlen; Identität des im Gespräch genannten Dokuments offen.",
+      "delegated_by": "pa1-web-ds25"
+    },
+    {
+      "id": "faculty-5-0",
+      "title": "Richtlinien zur Gestaltung wissenschaftlicher Arbeiten",
+      "publisher": "DHBW Mosbach",
+      "campus": "Mosbach",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "all"
+      ],
+      "cohorts": [],
+      "work_types": [
+        "PA1",
+        "PA2",
+        "BA"
+      ],
+      "version": "5.0 / 18.07.2023",
+      "published_at": "2023-07-18",
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/ressorts/esc/Lehrende/Richtlinien_Version2023-07-18.pdf",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": null,
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 4,
+      "availability": "RETRIEVED",
+      "notes": "33 Seiten im Webwerkzeug gelesen; direkter Byteabruf HTTP-Fehler, deshalb SHA-256 unbekannt. Neuere Mosbacher Fassung/Jahrgangsbindung nicht bestätigt. Seitenzählung und Abstractpflicht weichen von der DS-Seite ab."
+    },
+    {
+      "id": "dhbw-confidentiality-2026",
+      "title": "Vertraulichkeit studentischer Arbeiten",
+      "publisher": "DHBW",
+      "campus": "DHBW",
+      "faculty": "Wirtschaft",
+      "programs": [
+        "all"
+      ],
+      "cohorts": [],
+      "work_types": [
+        "PA1",
+        "PA2",
+        "BA"
+      ],
+      "version": "Mai 2026",
+      "published_at": null,
+      "valid_from": null,
+      "valid_until": null,
+      "original_url": "https://www.dhbw.de/fileadmin/user_upload/Dokumente/Qualitaetsmanagement/Infoblatt_Vertraulichkeit.pdf",
+      "retrieved_at": "2026-11-26T22:58:28Z",
+      "sha256": "7d0128920e3c8e0828b932d4d895c03127f4e8490f3656c3f1951b1cedb11639",
+      "classification": "PUBLIC",
+      "release": "CANDIDATE",
+      "binding": "CANDIDATE",
+      "hierarchy": 5,
+      "availability": "RETRIEVED",
+      "notes": "Öffentliches Informationsblatt; keine Freigabe zur KI-Verarbeitung."
+    }
+  ]
+}

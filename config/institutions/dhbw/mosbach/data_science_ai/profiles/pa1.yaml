@@ -1,0 +1,332 @@
+# ?ffentlich recherchierter Kandidat. KEINE Hochschulfreigabe. Keine erfundenen Gewichte.
+id: mosbach-ds-pa1-ds25-2026
+campus: Mosbach
+program: data_science_ai
+cohort: DS25
+work_type: PA1
+version: 2026-11-26.candidate.1
+release: CANDIDATE
+rules:
+- id: content-pages
+  description: Umfang des Inhaltsteils nach der jahrgangsspezifischen Zählweise prüfen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: content_pages
+  parameters:
+    min: 20
+    max: 30
+    basis: EXCLUDE_FIGURES_TABLES_LISTS_APPENDICES
+  scope: DOCUMENT
+  source_id: pa1-bundle-ds25
+  source_location: ProjektarbeitenTermineInfos_PA1.pdf, Seite 2
+  release: CANDIDATE
+  conflict_key: page_count_basis
+  conflict_value: EXCLUDE_FIGURES_TABLES
+- id: faculty-page-basis
+  description: Abweichende Fakultätsregel zum Inhaltsteil einschließlich Abbildungen/Tabellen
+    klären.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: content_pages
+  parameters:
+    basis: INCLUDE_CONTENT_FIGURES_TABLES
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 6, Abschnitt 2.2 Nr. 8
+  release: CANDIDATE
+  conflict_key: page_count_basis
+  conflict_value: INCLUDE_FIGURES_TABLES
+- id: abstract-de-words
+  description: 'Abstract Deutsch: 100 bis 200 Wörter.'
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: abstract_words
+  parameters:
+    language: de
+    min: 100
+    max: 200
+  scope: DOCUMENT
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+- id: abstract-en-words
+  description: 'Abstract Englisch: 100 bis 200 Wörter.'
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: abstract_words
+  parameters:
+    language: en
+    min: 100
+    max: 200
+  scope: DOCUMENT
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+- id: abstract-mandatory
+  description: Deutschsprachiges und englischsprachiges Abstract erforderlich.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: manual
+  parameters: {}
+  scope: DOCUMENT
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+  conflict_key: abstract_requirement
+  conflict_value: BOTH_MANDATORY
+- id: faculty-abstract-option
+  description: Abweichenden optionalen Charakter des Abstracts in der Fakultätsrichtlinie
+    klären.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: manual
+  parameters: {}
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 6, Abschnitt 2.2 Nr. 7
+  release: CANDIDATE
+  conflict_key: abstract_requirement
+  conflict_value: OPTIONAL_DE_OR_EN
+- id: declaration-presence
+  description: Eigenständigkeitserklärung im Dokument lokalisieren.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: presence
+  parameters:
+    component: declaration
+  scope: DOCUMENT
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+- id: declaration-signature
+  description: Unterschrift und Gültigkeit der Eigenständigkeitserklärung menschlich
+    prüfen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: signature
+  parameters: {}
+  scope: DOCUMENT
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+- id: topic-and-expose
+  description: Themeneinreichung und Exposé anhand organisatorischer Nachweise prüfen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: manual
+  parameters: {}
+  scope: ORGANIZATIONAL
+  source_id: pa1-web-ds25
+  source_location: PA1 DS25 – wesentliche Punkte
+  release: CANDIDATE
+- id: assessment-category-1
+  description: Themenerfassung und Strukturierung
+  category: content
+  requirement: MANDATORY
+  weight: null
+  max_points: 20
+  method: human_quality_review
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 1; Maximalpunktzahl
+  release: CANDIDATE
+- id: assessment-category-2
+  description: Themenbearbeitung
+  category: content
+  requirement: MANDATORY
+  weight: null
+  max_points: 40
+  method: human_quality_review
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 2; Maximalpunktzahl
+  release: CANDIDATE
+- id: assessment-category-3
+  description: Quellenauswahl und Quellenauswertung
+  category: literature
+  requirement: MANDATORY
+  weight: null
+  max_points: 30
+  method: human_quality_review
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 3; Maximalpunktzahl
+  release: CANDIDATE
+- id: assessment-category-4
+  description: Formale Aspekte
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: 10
+  method: human_quality_review
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 4; Maximalpunktzahl
+  release: CANDIDATE
+- id: citation-consistency
+  description: Verwendung fremder Quellen konsistent und nachvollziehbar kennzeichnen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: citation_consistency
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 4, Zitiertechnik
+  release: CANDIDATE
+- id: literature-quality
+  description: Wissenschaftliche und praxisnahe Literatur kritisch und problembezogen
+    auswählen.
+  category: literature
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: human_quality_review
+  parameters: {}
+  scope: DOCUMENT
+  source_id: assessment-form-2023
+  source_location: Abschnitt 3
+  release: CANDIDATE
+- id: contents-presence
+  description: Inhaltsverzeichnis lokalisieren.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: presence
+  parameters:
+    component: contents
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 6, Abschnitt 2.2 Nr. 3
+  release: CANDIDATE
+- id: bibliography-presence
+  description: Literaturverzeichnis lokalisieren.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: presence
+  parameters:
+    component: bibliography
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 14, Abschnitt 3.6.1
+  release: CANDIDATE
+- id: font-family
+  description: Textschrift anhand zuverl?ssig erhobener Layoutdaten pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: font_family
+  parameters:
+    expected: Arial
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 4, Abschnitt 2.1
+  release: CANDIDATE
+- id: font-size
+  description: Textschriftgr??e anhand zuverl?ssig erhobener Layoutdaten pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: font_size
+  parameters:
+    expected: 12
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 4, Abschnitt 2.1
+  release: CANDIDATE
+- id: margins
+  description: Seitenr?nder anhand zuverl?ssig erhobener Layoutdaten pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: margins
+  parameters:
+    expected:
+      left_cm: 4
+      right_cm: 2
+      top_cm: 3
+      bottom_cm: 2
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 4, Abschnitt 2.1
+  release: CANDIDATE
+- id: bibliographic-completeness
+  description: Bibliografische Angaben entsprechend dem Quellentyp menschlich pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: bibliographic_completeness
+  parameters: {}
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Abschnitt 3.6; interne Quellen insbesondere 3.6.12
+  release: CANDIDATE
+- id: page-numbering
+  description: Seitennummerierung anhand der ?berpr?ften Abschnittszuordnung pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: page_numbering
+  parameters:
+    expected: true
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 8, Tabelle 1
+  release: CANDIDATE
+- id: figures-list
+  description: Erforderlichkeit und Vollst?ndigkeit des Abbildungsverzeichnisses pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: manual
+  parameters:
+    minimum_figures: 3
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 6, Abschnitt 2.2 Nr. 5
+  release: CANDIDATE
+- id: tables-list
+  description: Erforderlichkeit und Vollst?ndigkeit des Tabellenverzeichnisses pr?fen.
+  category: formal
+  requirement: MANDATORY
+  weight: null
+  max_points: null
+  method: manual
+  parameters:
+    minimum_tables: 3
+  scope: DOCUMENT
+  source_id: faculty-5-0
+  source_location: Seite 6, Abschnitt 2.2 Nr. 6
+  release: CANDIDATE

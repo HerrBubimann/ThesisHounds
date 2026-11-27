@@ -1,0 +1,42 @@
+# Standalone provisioning project; no processing network is made Internet-capable.
+name: thesishounds-provisioning
+services:
+  model-provisioner:
+    image: thesishounds/ollama:0.40.18
+    build:
+      context: .
+      dockerfile: infrastructure/ollama/Dockerfile
+    pull_policy: never
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 2.0
+    mem_limit: 2g
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_DEBUG: "false"
+      OLLAMA_NOHISTORY: "1"
+      OLLAMA_KEEP_ALIVE: "0"
+    networks: [provisioning]
+    volumes:
+      - ollama_models:/home/ollama/.ollama
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,uid=10001,gid=10001,mode=1770
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: none
+networks:
+  provisioning:
+    internal: false
+    enable_ipv6: false
+volumes:
+  ollama_models:
+    external: true
+    name: ${OLLAMA_MODEL_VOLUME:-thesishounds_ollama_models}

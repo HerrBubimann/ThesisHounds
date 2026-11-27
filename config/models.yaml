@@ -1,0 +1,67 @@
+models:
+  - id: qwen
+    name: qwen3:8b
+    manufacturer: Alibaba
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [orchestrator, content, methodology, formal, specialist, reviewer, synthesis]
+    privacy: PUBLIC
+    deployment_type: LOCAL
+    approved_endpoint: http://ollama:11434
+    data_processing_location: PRIVATE_PROCESSING_ZONE
+    allowed_classifications: [PUBLIC]
+    network_access: APPROVED_INFERENCE_ONLY
+    telemetry_enabled: false
+    cloud_features_enabled: false
+    license_status: UNREVIEWED
+    security_review_status: DEVELOPMENT_ONLY
+    approval_status: DEVELOPMENT_ONLY
+  - id: mistral
+    name: mistral:7b
+    manufacturer: Mistral AI
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [methodology, specialist, reviewer]
+    privacy: PUBLIC
+    deployment_type: LOCAL
+    approved_endpoint: http://ollama:11434
+    data_processing_location: PRIVATE_PROCESSING_ZONE
+    allowed_classifications: [PUBLIC]
+    network_access: APPROVED_INFERENCE_ONLY
+    telemetry_enabled: false
+    cloud_features_enabled: false
+    license_status: UNREVIEWED
+    security_review_status: DEVELOPMENT_ONLY
+    approval_status: DEVELOPMENT_ONLY
+  - id: llama
+    name: llama3.1:8b
+    manufacturer: Meta
+    provider: ollama
+    local: true
+    enabled: true
+    capabilities: [chat, structured_output]
+    context_length: 8192
+    estimated_ram_gib: 8
+    estimated_vram_gib: 6
+    allowed_roles: [content, formal, specialist, reviewer]
+    privacy: PUBLIC
+    deployment_type: LOCAL
+    approved_endpoint: http://ollama:11434
+    data_processing_location: PRIVATE_PROCESSING_ZONE
+    allowed_classifications: [PUBLIC]
+    network_access: APPROVED_INFERENCE_ONLY
+    telemetry_enabled: false
+    cloud_features_enabled: false
+    license_status: UNREVIEWED
+    security_review_status: DEVELOPMENT_ONLY
+    approval_status: DEVELOPMENT_ONLY

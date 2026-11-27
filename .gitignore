@@ -1,0 +1,109 @@
+# ---------------------------------------------------------------------------
+# Secrets & local configuration
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+secrets/
+**/.streamlit/secrets.toml
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Local overrides that must not affect other developers
+compose.override.yaml
+compose.override.yml
+docker-compose.override.yml
+.claude/settings.local.json
+CLAUDE.local.md
+
+# ---------------------------------------------------------------------------
+# Confidential inputs and generated review material must stay out of Git.
+# (Mirrors the exclusions in .dockerignore.)
+# ---------------------------------------------------------------------------
+*.pdf
+*.doc
+*.docx
+*.dotx
+*.odt
+*.rtf
+*.pptx
+*.xlsx
+*.xltx
+*.xls
+*.csv
+uploads/
+documents/
+data/
+reports/
+output/
+outputs/
+backups/
+snapshots/
+embeddings/
+vectorstore/
+private/
+*.jsonl
+*.sqlite*
+*.parquet
+*.gguf
+*.safetensors
+
+# ---------------------------------------------------------------------------
+# Local tool environments (portable Python, uv/pip caches, virtualenvs)
+# ---------------------------------------------------------------------------
+.python/
+.tools/
+.runtime/
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------------------------
+# Python bytecode, build & packaging artefacts
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ---------------------------------------------------------------------------
+# Test, lint & type-check caches / reports
+# ---------------------------------------------------------------------------
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+
+# ---------------------------------------------------------------------------
+# Logs & temporary files
+# ---------------------------------------------------------------------------
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# IDEs & OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
