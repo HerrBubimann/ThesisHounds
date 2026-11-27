@@ -12,16 +12,21 @@ from uuid import uuid4
 INFERENCE_PROBE = """
 import asyncio, httpx
 from app.config import Settings
+from app.security.access_control import DEMO_PRINCIPAL, current_principal
 from app.security.egress_policy import PinnedInferenceTransport
 from app.services.llm_service import LLMService
 async def probe():
     config = Settings()
-    async with httpx.AsyncClient(
-        base_url=str(config.ollama_base_url), trust_env=False,
-        follow_redirects=False, transport=PinnedInferenceTransport()
-    ) as client:
-        result = await LLMService(config, client).chat('Test')
-        assert result.answer.startswith('MOCK')
+    token = current_principal.set(DEMO_PRINCIPAL)
+    try:
+        async with httpx.AsyncClient(
+            base_url=str(config.ollama_base_url), trust_env=False,
+            follow_redirects=False, transport=PinnedInferenceTransport()
+        ) as client:
+            result = await LLMService(config, client).chat('Test')
+            assert result.answer.startswith('MOCK')
+    finally:
+        current_principal.reset(token)
 asyncio.run(probe())
 """
 

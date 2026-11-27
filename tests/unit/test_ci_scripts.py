@@ -1,11 +1,16 @@
 """The quality gate must never report success for failed, cancelled, skipped or missing results."""
 
 import json
+from runpy import run_path
 
 import pytest
 
 from infrastructure.scripts import ci_summary, validate_docker
+from tests.fixtures import ROOT
 
+INFERENCE_PROBE = run_path(ROOT / "infrastructure/security/scripts/network_acceptance.py")[
+    "INFERENCE_PROBE"
+]
 JOBS = ["code-quality", "unit-tests", "integration-tests"]
 
 
@@ -144,3 +149,8 @@ def test_docker_validator_rejects_external_network():
 def test_repository_dockerfiles_and_env_are_valid():
     assert validate_docker.check_dockerfiles() == []
     assert validate_docker.check_environment_documented() == []
+
+
+def test_network_acceptance_probe_uses_and_resets_the_demo_principal():
+    assert "current_principal.set(DEMO_PRINCIPAL)" in INFERENCE_PROBE
+    assert "current_principal.reset(token)" in INFERENCE_PROBE
