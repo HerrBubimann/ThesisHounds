@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY frontend/requirements.lock /app/requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
+    && python -m pip uninstall --yes pip \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home app
 COPY --chown=10001:10001 frontend /app/frontend

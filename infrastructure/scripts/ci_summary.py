@@ -145,7 +145,7 @@ def cmd_gate() -> int:
     if unexpected:
         problems.append(f"jobs not declared mandatory: {sorted(unexpected)}")
     tests = []
-    for suite in ("unit", "integration", "security"):
+    for suite in ("unit", "integration", "security", "privacy"):
         counts, suite_problems = junit_problems(reports / f"junit-{suite}.xml")
         problems += suite_problems
         if counts:

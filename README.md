@@ -1,14 +1,39 @@
 # ThesisHounds
 
+**Security-Folgeaudit 27.11.2026:** Frontend-IP-Pinning, getrennte Modellbereitstellung,
+Manifest-Digestprüfung, Bibliografie-IFC und Größen-/Zeitlimits ergänzt.
+568 lokale Tests bestanden; bekannte offene Basisimagebefunde und Produktionsblocker
+stehen im [aktuellen Hardening-Bericht](docs/security/hardening_results.md).
+
+**Mosbach-Erweiterung 27.11.2026:** Quellengebundene Kandidatenprofile für PA1/DS25,
+PA2/DS24 und BA/DS23, lokale Knowledge-Base-/Metadatenimporte, Formalien-/Quellenprüfung
+und menschliche Prüfentscheidungen sind ergänzt. Alle offiziellen Profile bleiben
+bis zur bestätigten Gültigkeit/Freigabe Kandidaten; die Demo verwendet weiterhin
+Beispielkriterien. Keine externen Recherche-APIs und keine echten Arbeiten freigegeben.
+[Originalquellen/Anwendbarkeit](docs/dhbw/mosbach_sources.md) ·
+[Import und Profile](docs/dhbw/assessment_profiles.md) ·
+[lokale Quellenprüfung/GROBID-Grenzen](docs/research/citation_verification.md) ·
+[Nachweise der Mosbach-Erweiterung](docs/evaluation/mosbach_results.md).
+
 [![CI](https://github.com/HerrBubimann/ThesisHounds/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HerrBubimann/ThesisHounds/actions/workflows/ci.yml)
 
 Lokale, datenschutzorientierte Infrastructure Foundation des DHBW-Projekts zur Begutachtung wissenschaftlicher Arbeiten. Version 0.2 erweitert FastAPI, Streamlit und einen gemeinsamen Ollama-Service um einen kontrollierten LangGraph-Workflow mit mehreren Modellen und dynamischen Subagenten.
 
-Die Implementierung führt **synthetische Beispielanalysen** aus. Der unabhängige Bewertungs-MVP ergänzt menschliche Erstbewertung, kriteriumsweise KI-Zweitbewertung, serverseitige Freigaben, Vergleich, Diskussion und menschliche Finalisierung. PA1/PA2/BA verwenden ausdrücklich inoffizielle Beispielprofile. PDF-Parser, produktives RAG und Benutzerverwaltung stehen noch aus. Im Betrieb stammen KI-Antworten aus lokalen Modellaufrufen; Tests verwenden gekennzeichnete Mock-Provider.
+Die Implementierung führt **synthetische Beispielanalysen** aus. Der unabhängige Bewertungs-MVP ergänzt menschliche Erstbewertung, kriteriumsweise Zweitbewertung, serverseitige Freigaben, Vergleich und menschliche Finalisierung. PA1/PA2/BA verwenden ausdrücklich inoffizielle Beispielprofile. PDF-Parser, produktives RAG und Hochschulauthentifizierung stehen noch aus.
+
+**Sicherheitsstand 2026-11-26:** Der Standardbetrieb verwendet ausschließlich einen lokalen Mock ohne Netzwerkzugriff. Freie Chattexte und Analyseaufträge sind gesperrt; menschliche Kommentare bleiben RESTRICTED und werden nicht an Modelle weitergegeben. Die KI-Diskussion bleibt bis zur Freigabe gesperrt; ausdrücklich bestätigte menschliche Prüfung ohne Modell bleibt möglich. UNIVERSITY_SECURE und die externen Modi verweigern den Start. Echte Arbeiten bleiben bis zur Infrastruktur-, Rechts- und Organisationsfreigabe gesperrt. [Gap Analysis und Implementierungsplan](docs/security/gap_analysis.md), [Sicherheitsarchitektur](docs/security/privacy_architecture.md), [Tests](docs/security/privacy_test_results.md), [Produktionsblocker](docs/security/production_readiness.md).
 
 Professorenfeedback: [Gap Analysis und Backlog](docs/architecture/professor_feedback_gap.md), [Umsetzungsstand](docs/architecture/implementation_status.md), [MVP-Anleitung](docs/architecture/assessment_mvp.md), [Hochschulbetrieb](docs/architecture/university_deployment.md), [Recherche](docs/research/state_of_the_art.md), [Risiken](docs/security/risk_register.md) und [offene Fragen](docs/stakeholders/open_questions.md). Öffentliche Recherche und KI-Punktevergabe bleiben deaktiviert. Die Sitzungsspeicherung ist flüchtig; echte studentische Arbeiten sind noch nicht freigegeben.
 
 ## Architektur
+
+Wissenschaftliches Engineering: [Requirements Traceability](docs/requirements/traceability.md),
+[Model Routing](docs/architecture/model_routing.md), [adaptive Agenten](docs/architecture/adaptive_agents.md),
+[Evidence Validation](docs/architecture/evidence_validation.md) und
+[Evaluationsergebnisse](docs/evaluation/results.md). Der kriteriumsweise MVP ergänzt
+jetzt verpflichtende Coverage, kontrollierte Zusatzanalysen, adversariale Gegenprüfung
+und einen Evidence Explorer. Das A–E-Evaluation-Lab läuft standardmäßig mit Mocks;
+reale Modellqualität und menschliche Referenzbefunde bleiben ausdrücklich offen.
 
 ```mermaid
 flowchart TB
@@ -46,8 +71,8 @@ Im Repository-Stamm ausführen. Eine vorhandene `.env` erhalten.
 Copy-Item .env.example .env
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-dev.lock
-# Baut Images und lädt alle aktivierten lokalen Modelle aus config/models.yaml:
-.\.venv\Scripts\python.exe infrastructure/scripts/provision.py
+# Baut die Mock-Demo; keine Modellgewichte erforderlich:
+docker compose build
 # Offline starten:
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 .\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --chat
@@ -62,12 +87,17 @@ Im bereits von Codex vorbereiteten Checkout ist `.venv` vorhanden; die Installat
 cp .env.example .env
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
-.venv/bin/python infrastructure/scripts/provision.py
+docker compose build
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 .venv/bin/python infrastructure/scripts/smoke.py --analysis --mode D
 ```
 
-`provision.py` benötigt PyYAML aus der Entwicklungsinstallation. Es lädt standardmäßig `qwen3:8b`, `mistral:7b` und `llama3.1:8b`. Keine vertrauliche Verarbeitung während der Bereitstellung. Nach einem normalen Fehler wird das Online-Netz im `finally`-Schritt entfernt; nach hartem Abbruch gilt die [Wiederherstellungsanleitung](docs/setup.md#unterbrochene-bereitstellung).
+`provision.py` ist optional: Es verlangt dokumentierte Artefakt-/Lizenzfreigaben,
+Version, Herkunft und vollständigen Digest. Die mitgelieferten Modelle besitzen
+diese Freigabe nicht; Downloads werden deshalb verweigert. Die eigenständige
+Provisioning-Zone startet keine Verarbeitungsdienste, berührt kein aktives
+Modell-Volume und entfernt ihr Online-Netz im `finally`-Schritt.
+[Details und Wiederherstellung](docs/setup.md#unterbrochene-bereitstellung).
 
 ## Konfiguration und Betriebsmodi
 

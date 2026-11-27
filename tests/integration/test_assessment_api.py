@@ -18,13 +18,16 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
     application = create_app(
         Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path)
     )
-    with patch("app.main.OllamaProvider", return_value=provider), TestClient(application) as client:
+    with (
+        patch("app.main.create_provider", return_value=provider),
+        TestClient(application) as client,
+    ):
         assert len(client.get(BASE + "/profiles").json()) == 3
         response = client.post(BASE, json={"work_type": "PA1", "profile_id": "ba-example"})
         assert response.status_code == 422
         record = client.post(BASE, json={"work_type": "PA1", "profile_id": "pa1-example"}).json()
         path, key = BASE + "/" + record["id"], record["id"]
-        assert client.get(path + "/document").json()["classification"] == "SYNTHETIC"
+        assert client.get(path + "/document").json()["classification"] == "PUBLIC"
         for suffix in ["/comparison", "/draft"]:
             assert client.get(path + suffix).status_code == 409
         assert client.post(path + "/release", json={"confirmed": True}).status_code == 409
@@ -57,7 +60,11 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
             assert client.post(path + "/human-review", json=human).status_code == 200
         # Independent AI prompts never contain a human first review.
         assert "HUMAN_PRIVATE_MARKER" not in json.dumps(provider.contexts)
-        assert len(provider.contexts) == 3
+        # Three mandatory calls, one controlled topic supplement and four adversarial reviews.
+        assert len(provider.contexts) == 8
+        assert (
+            sum("adversarial academic verifier" in c[0]["content"] for c in provider.contexts) == 4
+        )
         assert client.get(path + "/comparison").status_code == 409
         assert client.post(path + "/release", json={"confirmed": True}).status_code == 200
         before = client.get(path + "/comparison").json()
@@ -74,7 +81,10 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         question = {"criterion_id": "unknown", "question": "Welche Gegenargumente gibt es?"}
         assert client.post(path + "/discussion", json=question).status_code == 422
         question["criterion_id"] = "literature"
-        assert client.post(path + "/discussion", json=question).status_code == 200
+        calls_before = len(provider.contexts)
+        assert client.post(path + "/discussion", json=question).status_code == 403
+        assert len(provider.contexts) == calls_before
+        assert client.post(path + "/manual-review", json={"confirmed": True}).status_code == 200
         for row in before["criteria"]:
             decision["criterion_id"] = row["criterion_id"]
             assert client.post(path + "/decisions", json=decision).status_code == 200
@@ -82,7 +92,16 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         decision["conclusion"] = "Korrigierte menschliche Schlussfolgerung"
         assert client.post(path + "/decisions", json=decision).status_code == 200
         after = client.get(path + "/comparison").json()
-        assert before["criteria"] == after["criteria"]
+
+        def without_approval(value):
+            if isinstance(value, dict):
+                return {k: without_approval(v) for k, v in value.items() if k != "human_approval"}
+            if isinstance(value, list):
+                return [without_approval(v) for v in value]
+            return value
+
+        assert without_approval(before["criteria"]) == without_approval(after["criteria"])
+        assert all(row["ai"]["human_approval"] == "REJECTED" for row in after["criteria"])
         assert len(after["decisions"]) == 4
         draft = client.get(path + "/draft").json()
         assert draft["label"] == "Gutachtenentwurf"
@@ -97,7 +116,7 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
 def test_invalid_model_output_fails_closed(tmp_path):
     app = create_app(Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path))
     with (
-        patch("app.main.OllamaProvider", return_value=AssessmentProvider(fail=True)),
+        patch("app.main.create_provider", return_value=AssessmentProvider(fail=True)),
         TestClient(app) as client,
     ):
         record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()
@@ -119,7 +138,7 @@ def test_cancellation_and_shared_active_run_limit(tmp_path):
 
     app = create_app(Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path))
     with (
-        patch("app.main.OllamaProvider", return_value=AssessmentProvider(delay=30)),
+        patch("app.main.create_provider", return_value=AssessmentProvider(delay=30)),
         TestClient(app) as client,
     ):
         record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()

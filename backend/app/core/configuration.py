@@ -4,6 +4,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.llm.model_registry import ModelRegistry
+from app.llm.model_router import ResourceBudget
 from app.schemas.domain import Category
 from app.security.policy_engine import PolicyConfig, PolicyEngine
 
@@ -27,6 +28,8 @@ class ExecutionLimits(BaseModel):
     max_active_runs: int = Field(default=1, ge=1, le=2)
     max_retained_runs: int = Field(default=20, ge=1, le=100)
     retention_seconds: float = Field(default=3600, ge=1, le=86400)
+    inference_ram_limit_gib: float | None = Field(default=None, ge=0)
+    inference_vram_limit_gib: float | None = Field(default=None, ge=0)
 
 
 class SupervisorDefinition(BaseModel):
@@ -54,7 +57,18 @@ class AgentsConfig(BaseModel):
 
 
 class RuntimeConfig:
+    @property
+    def resource_budget(self) -> ResourceBudget:
+        ram, vram = self.limits.inference_ram_limit_gib, self.limits.inference_vram_limit_gib
+        return ResourceBudget(
+            ram_gib=ram,
+            vram_gib=vram,
+            source="OPERATOR_LIMIT" if ram is not None or vram is not None else "UNMEASURED",
+        )
+
     def __init__(self, directory: Path):
+        self.directory = directory
+
         def load(name):
             return yaml.safe_load((directory / name).read_text("utf-8"))
 
@@ -62,6 +76,12 @@ class RuntimeConfig:
         self.limits = ExecutionLimits.model_validate(load("execution.yaml"))
         self.agents = AgentsConfig.model_validate(load("agents.yaml"))
         self.policy = PolicyEngine(PolicyConfig.model_validate(load("policies.yaml")))
+        capability_file = directory / "model_capabilities.yaml"
+        self.capabilities = (
+            yaml.safe_load(capability_file.read_text("utf-8"))["records"]
+            if capability_file.exists()
+            else []
+        )
         self.models.get(self.agents.orchestrator_model, "orchestrator")
         self.models.get(self.agents.synthesis_model, "synthesis")
         for supervisor in self.agents.supervisors:

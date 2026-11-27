@@ -8,7 +8,12 @@ from pydantic import BaseModel, ValidationError
 
 from app.llm.errors import LLMError
 from app.llm.model_registry import ModelDefinition, ModelRegistry
+from app.llm.model_router import ModelRouter, ResourceBudget, RoutingDecision, TaskType
 from app.llm.providers.base import Completion, LLMProvider
+from app.security.audit_service import AuditEvent, AuditService
+from app.security.classification import classify, combine
+from app.security.egress_policy import inference_dispatch
+from app.security.information_flow import InformationLabel
 from app.security.policy_engine import PolicyEngine
 
 T = TypeVar("T", bound=BaseModel)
@@ -79,12 +84,43 @@ class LLMGateway:
         *,
         max_parallel: int = 1,
         sequential_loading: bool = True,
+        capability_records=(),
     ) -> None:
         self.registry = registry
         self.providers = providers
         self.policy = policy
         self.sequential_loading = sequential_loading
         self.slots = asyncio.Semaphore(1 if sequential_loading else max_parallel)
+        self.audit: AuditService | None = None
+        self.router = ModelRouter(registry, policy, capability_records)
+
+    async def route(
+        self,
+        task: TaskType,
+        role: str,
+        classification: str,
+        manual_default: str,
+        *,
+        resources: ResourceBudget | None = None,
+        exclude_manufacturers: frozenset[str] = frozenset(),
+        available: dict[str, str] | None = None,
+    ) -> RoutingDecision:
+        if available is None:
+            provider = self.providers.get("ollama")
+            if provider is None:
+                raise LLMError(503, "Lokaler Provider fehlt.")
+            available = {m.name: m.digest for m in await provider.discover()}
+        # The live gateway policy remains mandatory, even if it is replaced/unavailable.
+        self.router.policy = self.policy
+        return self.router.select(
+            task,
+            role,
+            classification,
+            available,
+            manual_default,
+            resources=resources,
+            exclude_manufacturers=exclude_manufacturers,
+        )
 
     async def complete(
         self,
@@ -98,9 +134,20 @@ class LLMGateway:
         max_tokens: int = 2048,
         on_call: Callable[[], None] | None = None,
         on_result: Callable[[Completion], None] | None = None,
+        label: InformationLabel | None = None,
     ) -> tuple[Completion, T | None]:
+        classification = (
+            combine(classification, label.classification) if label else classify(classification)
+        )
         model = self.registry.get(model_id, role)
-        self.policy.check(model, classification, role)
+        try:
+            self.policy.check(model, classification, role)
+        except Exception:
+            if self.audit and label:
+                self.audit.record(
+                    AuditEvent(analysis_id=label.analysis_id, action="DENY", decision="DENY")
+                )
+            raise
         capability = "structured_output" if output_type else "chat"
         if capability not in model.capabilities or model.provider not in self.providers:
             raise LLMError(503, "Provider oder Modellfähigkeit ist nicht verfügbar.")
@@ -111,9 +158,14 @@ class LLMGateway:
             raise LLMError(422, "Anfrage überschreitet das konservative Kontextbudget.")
         async with self.slots:
             self.policy.check(model, classification, role)
+            if self.audit and label:
+                self.audit.record(
+                    AuditEvent(analysis_id=label.analysis_id, action="PROCESS", decision="ALLOW")
+                )
             budget.reserve(input_bound, max_tokens)
             if on_call:
                 on_call()
+            dispatch_token = inference_dispatch.set(model.name)
             try:
                 response = await self.providers[model.provider].complete(
                     model,
@@ -125,7 +177,10 @@ class LLMGateway:
             except BaseException:
                 budget.unknown_token_calls += 1
                 raise
+            finally:
+                inference_dispatch.reset(dispatch_token)
             budget.record(response, reserved_input=input_bound, reserved_output=max_tokens)
+            response = response.model_copy(update={"data_classification": classification})
             if on_result:
                 on_result(response)
             if budget.reserved_tokens > budget.max_tokens:

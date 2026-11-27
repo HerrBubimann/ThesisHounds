@@ -17,6 +17,20 @@ def render_assessment_review():
     try:
         if "assessment_id" not in st.session_state:
             work_type = st.selectbox("Arbeitstyp", ["PA1", "PA2", "BA"])
+            program = st.selectbox(
+                "Studiengang",
+                ["data_science_ai", "wirtschaftsinformatik"],
+                format_func=lambda value: (
+                    "Data Science und KI" if value == "data_science_ai" else "Wirtschaftsinformatik"
+                ),
+            )
+            cohort = st.selectbox(
+                "Jahrgang für die Richtlinienvorschau",
+                ["DS23", "DS24", "DS25"]
+                if program == "data_science_ai"
+                else ["WI23", "WI24", "WI25"],
+                index=None,
+            )
             if st.button("Synthetische Begutachtung anlegen"):
                 record = request_backend(
                     "POST",
@@ -24,6 +38,8 @@ def render_assessment_review():
                     json={
                         "work_type": work_type,
                         "profile_id": work_type.lower() + "-example",
+                        "program": program,
+                        "cohort": cohort,
                     },
                 )
                 st.session_state.assessment_id = record["id"]
@@ -32,7 +48,28 @@ def render_assessment_review():
         path = f"{BASE}/{st.session_state.assessment_id}"
         record = request_backend("GET", path)
         st.caption(f"{record['state']} · Infrastruktur: {record['deployment_mode']}")
+        st.caption(
+            f"Schutzklasse: {record.get('classification', 'RESTRICTED')} · "
+            f"Sperrvermerk erkannt: {record.get('sperrvermerk_detected', False)} · "
+            "Zugriff: synthetische Einzelsitzung · Speicherung: zeitlich begrenzt"
+        )
+        st.caption(
+            f"Dokument: {record.get('document_classification', 'PUBLIC')} "
+            "(servereigene synthetische Fixture)"
+        )
         st.write("Öffentliche Recherche: deaktiviert · KI-Punktevergabe: deaktiviert")
+        security = record.get("security", {})
+        st.caption(
+            "Autorisierte Mock-Modellkennungen: "
+            + ", ".join(security.get("authorized_demo_models", []))
+        )
+        st.caption(
+            f"Modus: {security.get('mode', 'DEVELOPMENT')} · "
+            f"Inferenz: {security.get('endpoint', 'in-process://demo')} · "
+            "Lokal importierte öffentliche Metadaten · Hochschulfreigabe ausstehend"
+        )
+        if record.get("cohort"):
+            render_rules(record.get("institutional_rules", {}))
         with st.expander("Synthetisches Testdokument lesen"):
             document = request_backend("GET", path + "/document")
             for page, text in document["pages"].items():
@@ -41,6 +78,7 @@ def render_assessment_review():
             st.rerun()
         if st.button("Weitere synthetische Begutachtung"):
             del st.session_state.assessment_id
+            st.session_state.pop("evidence_finding", None)
             st.rerun()
         if record["state"] == "CANCELLED":
             st.info("Begutachtung abgebrochen.")
@@ -124,6 +162,8 @@ def render_human(path, criteria):
 
 def render_comparison(path, record):
     comparison = request_backend("GET", path + "/comparison")
+    if record.get("cohort"):
+        render_academic(path, record)
     for row in comparison["criteria"]:
         with st.expander(f"{row['criterion_id']} · {row['status']}"):
             left, right = st.columns(2)
@@ -131,11 +171,30 @@ def render_comparison(path, record):
             left.text(json.dumps(row["human"], ensure_ascii=False, indent=2))
             right.write("Unabhängige KI-Zweitbewertung")
             right.text(json.dumps(row["ai"], ensure_ascii=False, indent=2))
+            for finding in [row["ai"], *row["ai"].get("supplemental", [])]:
+                if finding.get("conflict"):
+                    st.warning("Ungeklärter Gegenbefund: fachliche Prüfung erforderlich.")
+                if st.button("Textbeleg öffnen", key="evidence_" + finding["finding_id"]):
+                    st.session_state.evidence_finding = finding["finding_id"]
+    if st.session_state.get("evidence_finding"):
+        evidence = request_backend(
+            "GET", path + "/findings/" + st.session_state.evidence_finding + "/evidence"
+        )
+        st.subheader("Evidence Explorer")
+        if evidence["matched"]:
+            st.caption(
+                f"Seite {evidence['page']} · Kapitel {evidence['chapter']} · {evidence['block_id']}"
+            )
+            st.text(evidence["original_text"])
+            st.text("Originalzitat: " + evidence["quote"])
+        else:
+            st.warning("Keine verifizierte Originaltextstelle; Referenz wird nicht angezeigt.")
+        st.caption("Texttreffer beweisen keine fachliche Richtigkeit. Extraktion: Textmodus.")
     st.caption(
         "Vergleichsstatus vergleicht Einschätzungen; er beweist keine sachliche Richtigkeit."
     )
     for entry in comparison["discussion"]:
-        st.text(f"Frage: {entry['question']}\nKI-Vorschlag: {entry['answer']}")
+        st.text(f"Frage: {entry['question']}\nPrüfung: {entry['answer']}")
     if record["state"] == "FINALIZED":
         st.text(request_backend("GET", path + "/draft")["text"])
         return
@@ -144,14 +203,41 @@ def render_comparison(path, record):
         criterion = st.selectbox("Kriterium für die Diskussion", ids)
         question = st.text_area("Frage / Gegenargument")
         if st.form_submit_button("Diskutieren"):
-            request_backend(
-                "POST", path + "/discussion", json={"criterion_id": criterion, "question": question}
-            )
+            try:
+                request_backend(
+                    "POST",
+                    path + "/discussion",
+                    json={"criterion_id": criterion, "question": question},
+                )
+            except BackendError as exc:
+                st.error(str(exc))
+            else:
+                st.rerun()
+    if not comparison["discussion"]:
+        st.info(
+            "Freie Diskussionsfragen und menschliche Bewertungen sind RESTRICTED. "
+            "Im Entwicklungsmodus ist die Weitergabe an Modelle gesperrt."
+        )
+        if st.button("Ohne KI-Diskussion menschlich prüfen"):
+            request_backend("POST", path + "/manual-review", json={"confirmed": True})
             st.rerun()
+
     if comparison["discussion"]:
         with st.form("criterion_decision"):
             criterion = st.selectbox("Menschliche Entscheidung für", ids)
             include = st.selectbox("KI-Befund übernehmen?", ["Ja", "Nein"], index=None)
+            extras = [
+                f for row in comparison["criteria"] for f in row["ai"].get("supplemental", [])
+            ]
+            selected_extras = st.multiselect(
+                "Zusätzliche Befunde des gewählten Kriteriums übernehmen",
+                [f["finding_id"] for f in extras],
+                format_func=lambda key: next(
+                    f["criterion_id"] + ": " + f["description"]
+                    for f in extras
+                    if f["finding_id"] == key
+                ),
+            )
             conclusion = st.text_area("Menschliche Schlussfolgerung")
             rationale = st.text_area("Begründung der Entscheidung")
             if st.form_submit_button("Entscheidung versioniert speichern"):
@@ -166,6 +252,7 @@ def render_comparison(path, record):
                             "include_ai_finding": include == "Ja",
                             "conclusion": conclusion,
                             "rationale": rationale,
+                            "include_finding_ids": selected_extras,
                         },
                     )
                     st.rerun()
@@ -174,3 +261,81 @@ def render_comparison(path, record):
         if st.button("Gutachtenentwurf abschließend menschlich freigeben"):
             request_backend("POST", path + "/finalize", json={"confirmed": True})
             st.rerun()
+
+
+def render_rules(resolved):
+    with st.expander("DHBW Mosbach: Richtlinien, Herkunft und Gültigkeit"):
+        st.warning(
+            "Richtlinienvorschau: keine aktivierten offiziellen Bewertungskriterien. "
+            "Die Begutachtungsdemo verwendet ausdrücklich Beispielkriterien."
+        )
+        for source in resolved.get("sources", []):
+            st.text(f"{source['title']} · {source['version']} · {source['release']}")
+            st.link_button("Öffentliche Originalquelle öffnen", source["original_url"])
+        for conflict in resolved.get("conflicts", []):
+            st.warning(
+                f"Regelkonflikt {conflict['key']}: {conflict['status']} – "
+                "menschliche Klärung erforderlich."
+            )
+        if not resolved.get("profile"):
+            st.info(
+                "Für diese Kombination aus Studiengang, Jahrgang und Arbeitstyp "
+                "liegt kein eindeutiges freigegebenes Profil vor."
+            )
+
+
+def render_academic(path, record):
+    checks = request_backend("GET", path + "/academic-checks")
+    with st.expander("Lokale Formalien- und Quellenprüfung"):
+        st.caption(
+            "Erst nach Abschluss der unabhängigen Bewertungen sichtbar. "
+            "Keine automatische Notenwirkung. NOT_FOUND betrifft nur lokale Teilbestände."
+        )
+        rows = checks["formal"]["checks"]
+        for row in rows:
+            st.text(
+                f"{row['criterion_id']}: {row['status']} · {row['reason']} · "
+                f"{row['source_id']}, {row['source_location']}"
+            )
+        references = checks["citations"]["references"]
+        for row in references:
+            st.text(f"Seite {row['entry']['page']}: {row['entry']['raw']}")
+            st.text(", ".join(row["statuses"]))
+            if st.button("Originalstelle der Quelle öffnen", key="citation_" + row["finding_id"]):
+                document = request_backend("GET", path + "/document")
+                entry = row["entry"]
+                text = document["pages"].get(str(entry["page"]), "")
+                if text[entry["start"] : entry["end"]] == entry["raw"]:
+                    st.text(text)
+                else:
+                    st.warning("Originalstelle nicht mehr eindeutig verifizierbar.")
+        if not references:
+            st.info(
+                "Keine unterstützten Literaturverzeichniseinträge extrahiert; "
+                "daraus folgt kein Nachweis fehlender Quellen."
+            )
+        for decision in checks.get("decisions", []):
+            st.text(f"{decision['finding_id']}: {decision['decision']} · {decision['rationale']}")
+        if record["state"] not in {"FINALIZED", "CANCELLED", "FAILED"}:
+            choices = [r["finding_id"] for r in [*rows, *references]]
+            if choices:
+                with st.form("academic_decision"):
+                    finding = st.selectbox("Lokalen Prüfbefund auswählen", choices)
+                    decision = st.selectbox(
+                        "Menschliche Bestätigung", ["ACCEPTED", "REJECTED"], index=None
+                    )
+                    rationale = st.text_area("Begründung zum lokalen Prüfbefund")
+                    if st.form_submit_button("Lokale Prüfentscheidung speichern"):
+                        if decision is None or not rationale.strip():
+                            st.warning("Entscheidung und eigene Begründung erforderlich.")
+                        else:
+                            request_backend(
+                                "POST",
+                                path + "/academic-decisions",
+                                json={
+                                    "finding_id": finding,
+                                    "decision": decision,
+                                    "rationale": rationale,
+                                },
+                            )
+                            st.rerun()

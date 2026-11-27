@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: privacy-dlp
+        name: Reject confidential artifact paths from the Git index
+        entry: python infrastructure/scripts/privacy_dlp.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

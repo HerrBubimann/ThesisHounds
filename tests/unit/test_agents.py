@@ -23,6 +23,9 @@ def setup_factory():
             task="test",
             depth=1,
             can_delegate=True,
+            data_classification="PUBLIC",
+            allowed_models=frozenset({"mistral"}),
+            allowed_documents=frozenset({"synthetic-demo"}),
         )
     )
     spec = AgentSpec(

@@ -26,10 +26,12 @@ CLAUDE.local.md
 *.pdf
 *.doc
 *.docx
+*.dotx
 *.odt
 *.rtf
 *.pptx
 *.xlsx
+*.xltx
 *.xls
 *.csv
 uploads/
@@ -38,6 +40,16 @@ data/
 reports/
 output/
 outputs/
+backups/
+snapshots/
+embeddings/
+vectorstore/
+private/
+*.jsonl
+*.sqlite*
+*.parquet
+*.gguf
+*.safetensors
 
 # ---------------------------------------------------------------------------
 # Local tool environments (portable Python, uv/pip caches, virtualenvs)
@@ -65,6 +77,7 @@ pip-wheel-metadata/
 # Test, lint & type-check caches / reports
 # ---------------------------------------------------------------------------
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
 .mypy_cache/
 .pyright/

@@ -67,15 +67,14 @@ def test_failed_model_download_removes_online_network() -> None:
 
     with (
         patch.object(provision.shutil, "which", return_value="docker"),
+        patch.object(provision, "provisioning_plan", return_value={"qwen3:8b": "a" * 64}),
+        patch.object(provision, "docker", return_value=""),
         patch.object(provision, "run", side_effect=run),
     ):
         with pytest.raises(subprocess.CalledProcessError):
             provision.main()
     assert calls[-1] == (
-        "-f",
-        "compose.yaml",
-        "-f",
-        "compose.provision.yaml",
+        *provision.ONLINE,
         "down",
         "--remove-orphans",
     )

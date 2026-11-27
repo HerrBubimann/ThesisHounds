@@ -39,20 +39,20 @@ def test_registry_and_provider_structured_output():
         gateway = LLMGateway(registry, {"ollama": provider}, PolicyEngine(PolicyConfig()))
         budget = CallBudget(1, 10000)
         _, reply = await gateway.complete(
-            "qwen", "orchestrator", "SYNTHETIC", [], budget, output_type=Reply
+            "qwen", "orchestrator", "PUBLIC", [], budget, output_type=Reply
         )
         assert reply.answer == "ok"
         assert budget.calls == 1 and budget.observed_tokens == 15
         assert provider.calls[0][2] is True
         with pytest.raises(LLMError) as error:
-            await gateway.complete("qwen", "orchestrator", "SYNTHETIC", [], budget)
+            await gateway.complete("qwen", "orchestrator", "PUBLIC", [], budget)
         assert error.value.status_code == 429
         assert len(provider.calls) == 1
 
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("classification", [None, "UNKNOWN", "SYNTHETIC", "PUBLIC", "CONFIDENTIAL"])
+@pytest.mark.parametrize("classification", [None, "UNKNOWN", "PUBLIC", "PUBLIC", "CONFIDENTIAL"])
 def test_external_provider_is_always_blocked(classification):
     registry = ModelRegistry.load(CONFIG / "models.yaml")
     model = registry.get("qwen").model_copy(update={"local": False, "provider": "openai"})
@@ -104,12 +104,19 @@ def test_ollama_capabilities_resources_and_schema_contract():
             assert await provider.health()
             assert "template" not in await provider.capabilities("qwen3:8b")
             assert (await provider.resources())["loaded_models"][0]["vram_bytes"] == 50
-            result = await provider.complete(
-                ModelRegistry.load(CONFIG / "models.yaml").get("qwen"),
+            gateway = LLMGateway(
+                ModelRegistry.load(CONFIG / "models.yaml"),
+                {"ollama": provider},
+                PolicyEngine(PolicyConfig()),
+            )
+            result, _ = await gateway.complete(
+                "qwen",
+                "orchestrator",
+                "PUBLIC",
                 [],
-                Reply.model_json_schema(),
-                100,
-                unload=True,
+                CallBudget(1, 10000),
+                output_type=Reply,
+                max_tokens=100,
             )
             assert result.text == '{"answer":"ok"}'
 
@@ -124,7 +131,7 @@ def test_invalid_structured_output_and_unknown_model():
         )
         with pytest.raises(LLMError) as error:
             await gateway.complete(
-                "qwen", "orchestrator", "SYNTHETIC", [], CallBudget(2, 10000), output_type=Reply
+                "qwen", "orchestrator", "PUBLIC", [], CallBudget(2, 10000), output_type=Reply
             )
         assert "PRIVATE" not in error.value.detail
         with pytest.raises(LLMError):
@@ -165,7 +172,7 @@ def test_context_and_token_budget_boundaries_before_provider_call(output_type):
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 messages,
                 budget,
                 output_type=output_type,
@@ -178,7 +185,7 @@ def test_context_and_token_budget_boundaries_before_provider_call(output_type):
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 messages,
                 CallBudget(2, required - 1),
                 output_type=output_type,
@@ -188,7 +195,7 @@ def test_context_and_token_budget_boundaries_before_provider_call(output_type):
         await gateway.complete(
             "qwen",
             "orchestrator",
-            "SYNTHETIC",
+            "PUBLIC",
             messages,
             budget,
             output_type=output_type,
@@ -200,7 +207,7 @@ def test_context_and_token_budget_boundaries_before_provider_call(output_type):
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 messages,
                 budget,
                 output_type=output_type,
@@ -223,7 +230,7 @@ def test_many_empty_messages_cannot_bypass_context_limit():
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 [{"role": "user", "content": ""}] * 256,
                 CallBudget(1, 100000),
                 max_tokens=100,
@@ -279,7 +286,7 @@ def test_reported_overrun_blocks_response_and_subsequent_calls():
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 [],
                 budget,
                 max_tokens=100,
@@ -292,7 +299,7 @@ def test_reported_overrun_blocks_response_and_subsequent_calls():
             await gateway.complete(
                 "qwen",
                 "orchestrator",
-                "SYNTHETIC",
+                "PUBLIC",
                 [],
                 budget,
                 max_tokens=100,
@@ -314,7 +321,7 @@ def test_invalid_output_limit_cannot_reduce_budget_or_reach_provider(max_tokens)
         budget = CallBudget(2, 10000)
         with pytest.raises(LLMError) as error:
             await gateway.complete(
-                "qwen", "orchestrator", "SYNTHETIC", [], budget, max_tokens=max_tokens
+                "qwen", "orchestrator", "PUBLIC", [], budget, max_tokens=max_tokens
             )
         assert error.value.status_code == 422
         assert budget.calls == budget.reserved_tokens == budget.observed_tokens == 0
@@ -355,9 +362,7 @@ def test_parallel_calls_share_budget_without_overspending(limited_by):
         results = await asyncio.wait_for(
             asyncio.gather(
                 *(
-                    gateway.complete(
-                        "qwen", "orchestrator", "SYNTHETIC", [], budget, max_tokens=100
-                    )
+                    gateway.complete("qwen", "orchestrator", "PUBLIC", [], budget, max_tokens=100)
                     for _ in range(6)
                 ),
                 return_exceptions=True,
@@ -397,7 +402,7 @@ def test_cancellation_keeps_reservation_and_releases_model_slot():
         )
         budget = CallBudget(2, 10000)
         first = asyncio.create_task(
-            gateway.complete("qwen", "orchestrator", "SYNTHETIC", [], budget, max_tokens=100)
+            gateway.complete("qwen", "orchestrator", "PUBLIC", [], budget, max_tokens=100)
         )
         try:
             await asyncio.wait_for(provider.started.wait(), timeout=2)
@@ -408,7 +413,7 @@ def test_cancellation_keeps_reservation_and_releases_model_slot():
         reserved = budget.reserved_tokens
         assert budget.calls == budget.unknown_token_calls == 1 and reserved > 0
         result, _ = await asyncio.wait_for(
-            gateway.complete("qwen", "orchestrator", "SYNTHETIC", [], budget, max_tokens=100),
+            gateway.complete("qwen", "orchestrator", "PUBLIC", [], budget, max_tokens=100),
             timeout=2,
         )
         assert result.text == provider.text
@@ -441,7 +446,7 @@ def test_cancelling_queued_call_does_not_charge_or_block_next_call():
 
         async def call():
             return await gateway.complete(
-                "qwen", "orchestrator", "SYNTHETIC", [], budget, max_tokens=100
+                "qwen", "orchestrator", "PUBLIC", [], budget, max_tokens=100
             )
 
         first = asyncio.create_task(call())

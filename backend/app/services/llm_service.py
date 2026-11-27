@@ -6,6 +6,8 @@ from app.config import Settings
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
 from app.llm.model_registry import ModelRegistry
+from app.llm.providers.base import LLMProvider
+from app.llm.providers.demo import DemoProvider
 from app.llm.providers.ollama import OllamaProvider
 from app.models.schemas import ChatResponse, LocalModel, StatusResponse
 from app.security.policy_engine import PolicyConfig, PolicyEngine
@@ -19,9 +21,10 @@ class LLMService:
         settings: Settings,
         client: httpx.AsyncClient,
         gateway: LLMGateway | None = None,
+        provider: LLMProvider | None = None,
     ) -> None:
         self.settings = settings
-        self.provider = OllamaProvider(settings, client)
+        self.provider = provider or OllamaProvider(settings, client)
         self.gateway = gateway or LLMGateway(
             ModelRegistry.load(settings.config_dir / "models.yaml"),
             {"ollama": self.provider},
@@ -46,12 +49,18 @@ class LLMService:
             ollama="available",
             model=self.settings.llm_model,
             model_available=available,
-            detail="Bereit für Testanfragen."
+            detail="DEVELOPMENT: synthetischer Mock-Provider, keine KI-Inferenz."
+            if isinstance(self.provider, DemoProvider)
+            else "Bereit für Testanfragen."
             if available
             else "Modell fehlt. Bitte Bereitstellung ausführen.",
         )
 
     async def chat(self, prompt: str) -> ChatResponse:
+        # A free-text prompt is unclassified even when a UI calls it a "test".
+        # Only the fixed server-owned connectivity fixture is released in this mode.
+        if prompt != "Test":
+            raise LLMError(403, "Freie Texteingaben sind bis zur Produktionsfreigabe gesperrt.")
         model = next(
             (m for m in self.gateway.registry.enabled() if m.name == self.settings.llm_model), None
         )
@@ -60,7 +69,7 @@ class LLMService:
         response, _ = await self.gateway.complete(
             model.id,
             "specialist",
-            "CONFIDENTIAL",
+            "PUBLIC",
             [{"role": "user", "content": prompt}],
             CallBudget(1, 100000),
             max_tokens=self.settings.llm_max_tokens,

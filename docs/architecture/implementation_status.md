@@ -1,5 +1,12 @@
 # Professor feedback delivery status
 
+Security update 2026-11-26: the current application defaults to an in-process mock,
+blocks real content/network inference and refuses UNIVERSITY_SECURE startup.
+The following original delivery table does not authorize production use or override
+the current [privacy architecture](../security/privacy_architecture.md),
+[production blockers](../security/production_readiness.md) or
+[observed test results](../security/privacy_test_results.md).
+
 2026-11-26. This records the incremental delivery after the initial
 [gap analysis/backlog](professor_feedback_gap.md). It is not a claim that all
 production Definition-of-Done items or stakeholder decisions are complete.

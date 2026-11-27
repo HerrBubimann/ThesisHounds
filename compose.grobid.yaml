@@ -1,0 +1,46 @@
+# Optional PUBLIC/synthetic parser experiment. Requires separately reviewed, preloaded image.
+# Never enables uploads or UNIVERSITY_SECURE. No Internet route, host ports or document mount.
+services:
+  backend:
+    networks:
+      document_processing:
+        ipv4_address: 172.30.30.2
+  grobid:
+    profiles: [local-parser]
+    image: ${GROBID_IMAGE:?Set a reviewed grobid image with immutable sha256 digest}
+    pull_policy: never
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 4g
+    cpus: 2.0
+    environment:
+      JAVA_TOOL_OPTIONS: "-Djava.io.tmpdir=/tmp -Duser.home=/tmp"
+      OTEL_SDK_DISABLED: "true"
+      DO_NOT_TRACK: "1"
+    dns: [127.0.0.1]
+    extra_hosts: ["api.crossref.org:127.0.0.1", "api.openalex.org:127.0.0.1"]
+    expose: ["8070"]
+    healthcheck:
+      test: [CMD, bash, -c, "exec 3<>/dev/tcp/127.0.0.1/8070"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - ${GROBID_CONFIG:?Set the prepared and reviewed local GROBID YAML}:/opt/grobid/grobid-home/config/grobid.yaml:ro
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m,uid=10001,gid=10001,mode=1770"]
+    networks:
+      document_processing:
+        ipv4_address: 172.30.30.3
+    logging:
+      driver: none
+networks:
+  document_processing:
+    internal: true
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.30.0/24

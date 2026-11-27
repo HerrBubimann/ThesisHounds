@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.llm.model_registry import ModelDefinition
 from app.models.schemas import LocalModel
+from app.security.classification import Classification
 
 
 class Completion(BaseModel):
@@ -11,6 +12,7 @@ class Completion(BaseModel):
     model: str
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
+    data_classification: Classification = Classification.RESTRICTED
 
 
 class LLMProvider(Protocol):

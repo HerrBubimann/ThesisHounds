@@ -5,7 +5,8 @@ from typing import Literal
 
 import yaml
 from app.schemas.domain import Category, StrictModel
-from pydantic import Field, model_validator
+from app.security.classification import Classification, classify
+from pydantic import Field, field_serializer, field_validator, model_validator
 
 
 class Criterion(StrictModel):
@@ -14,13 +15,14 @@ class Criterion(StrictModel):
     description: str = Field(min_length=1, max_length=300)
     expected_evidence: str = Field(min_length=1, max_length=300)
     instructions: str = Field(min_length=1, max_length=300)
-    weight: float = Field(default=1, gt=0, le=100)
-    max_points: float = Field(default=10, gt=0, le=100)
+    weight: float | None = Field(default=None, gt=0, le=100)
+    max_points: float | None = Field(default=None, gt=0, le=100)
     required: bool = True
     source: str = Field(min_length=1, max_length=300)
 
 
 class AssessmentProfile(StrictModel):
+    data_classification: Classification = Classification.RESTRICTED
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,39}$")
     work_type: Literal["PA1", "PA2", "BA"]
     version: str = Field(min_length=1, max_length=40)
@@ -30,6 +32,16 @@ class AssessmentProfile(StrictModel):
     approved_at: str = Field(default="", max_length=40)
     subject_notes: str = Field(default="", max_length=500)
     criteria: list[Criterion] = Field(min_length=1, max_length=6)
+
+    @field_validator("data_classification", mode="before")
+    @classmethod
+    def safe_classification(cls, value):
+        return classify(value)
+
+    @field_serializer("data_classification")
+    def serialize_classification(self, value):
+        # Preserve the existing JSON/YAML rubric interchange contract.
+        return classify(value).value
 
     @model_validator(mode="after")
     def validate_catalog(self):

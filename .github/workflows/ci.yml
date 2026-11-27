@@ -70,8 +70,12 @@ jobs:
       - name: Job summary and report check
         if: ${{ !cancelled() }}
         run: python infrastructure/scripts/ci_summary.py junit "Unit tests" reports/junit-unit.xml
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
         if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: unit-test-report
           path: reports/
@@ -101,8 +105,12 @@ jobs:
         run: >-
           python infrastructure/scripts/ci_summary.py junit "Integration tests"
           reports/junit-integration.xml
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
         if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: integration-test-report
           path: reports/
@@ -140,7 +148,7 @@ jobs:
       - name: Bandit (blocks severity >= MEDIUM with confidence >= MEDIUM)
         if: ${{ !cancelled() }}
         run: |
-          targets="backend/app frontend infrastructure/scripts"
+          targets="backend/app frontend infrastructure/scripts infrastructure/security/scripts"
           # Full report including LOW findings, for review only.
           "$RUNNER_TEMP/scanners/bin/bandit" -c pyproject.toml -r $targets -q \
             -f json -o reports/security/bandit.json --exit-zero
@@ -170,11 +178,53 @@ jobs:
           python infrastructure/scripts/ci_summary.py bandit reports/security/bandit.json
           python infrastructure/scripts/ci_summary.py pip-audit reports/security/pip-audit.json
           python infrastructure/scripts/ci_summary.py gitleaks reports/security/gitleaks.json
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
         if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: security-scan-report
           path: reports/
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+  privacy-security:
+    name: Privacy Security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-deps
+      - name: Reject prohibited documents in Git index
+        run: python infrastructure/scripts/privacy_dlp.py
+      - name: Mandatory privacy regressions and synthetic leakage canaries
+        run: >-
+          python -m pytest tests/security -q -p no:cacheprovider --tb=short
+          --junitxml=reports/junit-privacy.xml
+      - name: Fail on missing, failed, empty or skipped privacy tests
+        if: ${{ !cancelled() }}
+        run: python infrastructure/scripts/ci_summary.py junit "Privacy Security" reports/junit-privacy.xml
+      - name: Reproduce synthetic privacy and academic benchmarks (offline)
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.evaluation.privacy_lab --output reports/privacy-ablation.json
+          python -m app.evaluation.academic_benchmark --output reports/academic-benchmark.json
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
+        if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
+        with:
+          name: privacy-security-report
+          path: reports/junit-privacy.xml
           retention-days: ${{ env.RETENTION_DAYS }}
           if-no-files-found: error
 
@@ -221,8 +271,12 @@ jobs:
       - name: Job summary
         if: ${{ !cancelled() }}
         run: python infrastructure/scripts/ci_summary.py coverage reports/coverage.xml
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
         if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: coverage-report
           path: |
@@ -247,7 +301,7 @@ jobs:
         run: |
           docker compose config --quiet
           docker compose -f compose.yaml -f compose.gpu.yaml config --quiet
-          docker compose -f compose.yaml -f compose.provision.yaml config --quiet
+          docker compose -f compose.provision.yaml config --quiet
           docker compose -f compose.yaml -f compose.ci.yaml config --quiet
       - name: Validate healthchecks, networks, volumes, ports, env and GPU reservation
         # Includes standalone university rendering with synthetic .invalid endpoint;
@@ -305,16 +359,17 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
-      - name: Runtime smoke 1 - real Ollama image without model, non-root start, healthchecks
+      - name: Runtime smoke 1 - development mocks, non-root start, healthchecks
         run: |
           docker compose up -d --no-build --pull never --wait --wait-timeout 180
           docker compose exec -T frontend python -c "import urllib.request; assert urllib.request.urlopen('http://backend:8000/health', timeout=10).status == 200"
-          docker compose exec -T backend python -c "import json,urllib.request; s=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/status', timeout=15)); assert s['ollama'] == 'available'; assert not s['model_available']"
+          docker compose exec -T backend python -c "import json,urllib.request; s=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/status', timeout=15)); assert 'Mock-Provider' in s['detail']"
           docker compose down --remove-orphans
       - name: Runtime smoke 2 - end-to-end with mock LLM service
         run: |
           $COMPOSE_MOCK up -d --no-build --pull never --wait --wait-timeout 180
           python3 infrastructure/scripts/ci_e2e.py
+          python3 infrastructure/security/scripts/network_acceptance.py
       - name: Container status on failure (synthetic data only)
         if: ${{ failure() }}
         run: |
@@ -341,8 +396,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           python3 infrastructure/scripts/ci_summary.py trivy reports/docker/trivy-*.json
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Check generated artifacts for synthetic leakage canaries
+        id: artifact-privacy
         if: ${{ !cancelled() }}
+        run: python3 infrastructure/scripts/privacy_dlp.py artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.artifact-privacy.outcome == 'success' }}
         with:
           name: docker-scan-report
           path: reports/docker/
@@ -358,6 +417,7 @@ jobs:
       - integration-tests
       - coverage
       - security
+      - privacy-security
       - docker-validation
       - docker-build
     # Runs even if dependencies failed, were skipped or cancelled, so the check always reports.
@@ -388,6 +448,10 @@ jobs:
         with:
           name: coverage-report
           path: reports
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: privacy-security-report
+          path: reports
       - name: Evaluate quality gate
         if: ${{ always() }}
         env:
@@ -395,5 +459,5 @@ jobs:
           REPORTS_DIR: reports
           MANDATORY_JOBS: >-
             code-quality unit-tests integration-tests coverage security
-            docker-validation docker-build
+            docker-validation docker-build privacy-security
         run: python3 infrastructure/scripts/ci_summary.py gate

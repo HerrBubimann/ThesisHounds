@@ -9,6 +9,8 @@ from app.core.configuration import ExecutionLimits
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
 from app.schemas.domain import AgentRecord, AgentStatus
+from app.security.classification import combine
+from app.security.information_flow import InformationLabel
 from app.services.document_store import Document
 
 T = TypeVar("T", bound=BaseModel)
@@ -61,6 +63,15 @@ class ExecutionEngine:
     ) -> T:
         import json
 
+        if (
+            document.analysis_id != record.run_id
+            or document.document_id not in record.allowed_documents
+            or record.model_id not in record.allowed_models
+            or "document.read" not in record.allowed_tools
+            or not record.agent_id.startswith(record.run_id + "_")
+        ):
+            raise LLMError(403, "AGENT_SCOPE_DENIED")
+
         attempts = min(iterations, self.limits.max_iterations, self.limits.max_retries + 1)
         for attempt in range(attempts):
 
@@ -77,7 +88,7 @@ class ExecutionEngine:
                 _, result = await self.gateway.complete(
                     record.model_id,
                     record.role,
-                    document.classification,
+                    combine(document.classification, record.data_classification),
                     [
                         {
                             "role": "system",
@@ -98,6 +109,11 @@ class ExecutionEngine:
                     max_tokens=self.limits.max_output_tokens,
                     on_call=started,
                     on_result=completed,
+                    label=InformationLabel(
+                        combine(document.classification, record.data_classification),
+                        record.run_id,
+                        frozenset({document.document_id}),
+                    ),
                 )
                 return result
             except LLMError as exc:

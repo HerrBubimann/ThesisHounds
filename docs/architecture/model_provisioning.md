@@ -1,5 +1,13 @@
 # Controlled model provisioning
 
+Security follow-up 2026-11-27: `compose.provision.yaml` is now a standalone project
+with a dedicated online network and no processing services. Downloads require
+reviewed license/security/model approval, version, weights origin and a complete
+`expected_digest`. An in-use model volume is rejected. A separate unprivileged
+helper checks `/api/tags` via the provisioner's loopback before success is reported.
+No actual download approval is shipped. These guards do not authorize real documents.
+The router/provider also reject a changed configured digest before sending content.
+
 The registry now accepts an optional `huggingface` object. Existing Ollama entries
 continue to work and are not retroactively claimed to be university-approved.
 Candidate entries must be `enabled: false`. Required artifact metadata: repository,

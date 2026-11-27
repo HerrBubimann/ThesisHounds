@@ -9,8 +9,16 @@ from pydantic import Field
 
 class ResearchQuery(StrictModel):
     terms: str = Field(min_length=1, max_length=300)
-    classification: Literal["PUBLIC", "CONFIDENTIAL", "INTERNAL", "SYNTHETIC"]
-    provider: Literal["crossref", "openalex", "semantic_scholar", "arxiv"]
+    classification: Literal["PUBLIC", "CONFIDENTIAL", "INTERNAL", "RESTRICTED", "SYNTHETIC"]
+    provider: Literal[
+        "crossref",
+        "openalex",
+        "semantic_scholar",
+        "arxiv",
+        "datacite",
+        "unpaywall",
+        "retraction_watch",
+    ]
 
 
 class ResearchGateway:

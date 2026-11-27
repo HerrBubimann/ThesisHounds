@@ -1,57 +1,60 @@
 # Threat model and trust boundaries
 
-Date: 2026-11-26. Scope: synthetic MVP plus explicit future research boundary.
-Assets: thesis content, human first review, hidden AI findings, model credentials,
-criterion provenance, human decisions and runtime budgets. Actors: reviewer,
-document author, malicious retrieved content, compromised model artifact/service,
-unauthorized client and operator. The trusted operator can change code/configuration;
-this MVP does not defend against a compromised host or administrator.
+## Folgeaudit: Transport und Bereitstellung (27.11.2026)
 
-```mermaid
-flowchart LR
-    Reviewer[Single local assessor] --> UI[Streamlit]
-    UI --> API[FastAPI state guards]
-    API --> Human[(Frozen first review)]
-    API --> PrivateAI[(Hidden independent AI review)]
-    Fixture[Server-owned synthetic document] --> Review[Criterion loop]
-    Profiles[Operator-reviewed example profiles] --> Review
-    Review --> Gateway[Existing policy / budgets / semaphore]
-    Gateway --> Ollama[Private local or approved university Ollama]
-    Ollama --> PrivateAI
-    Human --> Gate[Both complete + explicit release]
-    PrivateAI --> Gate
-    Gate --> Compare[Comparison and bounded discussion]
-    Compare --> Decisions[Append-only human decisions]
-    Decisions --> Draft[Deterministic draft]
-    Draft --> Final[Explicit human final release]
-    Research[Future isolated research service - disabled] -. no access .-> Human
-    Research -. no access .-> PrivateAI
-```
+| STRIDE | Konkreter Pfad | Ergänzte Kontrolle | Offene Grenze |
+|---|---|---|---|
+| Spoofing / Disclosure | manipulierte Backend-DNS-Antwort im Frontend | alle IPs prüfen, einmal numerisch verbinden; keine Redirects/Proxys | Browser-/Hostabnahme |
+| Tampering | mutable Ollama-Tags/fehlende Modellprovenienz | volle Servermanifest-Digests und Freigaben vor Download und Promptversand | Gewichtsbytes/Serverintegrität, Race mit privilegiertem Operator |
+| Disclosure / Privilege | Provisioning erbt Inferenznetz/-Volume einer aktiven Anwendung | eigenes Projekt/Netz, nur Modell-Volume, aktive Nutzung ablehnen | kein verteilter Operatorlock |
+| Disclosure | Bibliografie-Derivat verliert Taint/Analysebereich | Eintragsklasse und Scope, Maximumregel, Fremdscope-Deny vor Modellaufruf | künftige Adapter prüfen |
+| Denial of service | große/langsame Bodies oder unbeschränkte Antwort | vor Handler begrenzen, 15-s-Bodydeadline, 8-MB-Antworten, Modellgesamtdeadline | Zielhostquoten/Mehrbenutzerlast |
+| Repudiation | Scannergate wird mit Schwachstellenfreiheit verwechselt | vollständiger Befundbericht mit DBzeitpunkt und getrenntem Gateergebnis | Risikoannahme und Patchprozess institutionell offen |
 
-The dashed edges denote forbidden access, not implemented connections. The current
-ResearchGateway has no HTTP client, datastore reference or provider executor.
 
-| Boundary | Enforcement / remaining limitation |
-|---|---|
-| Browser → API | Loopback UI, internal backend; strict Pydantic schemas; content rendered as text. No multi-user auth yet. |
-| Human first review → AI context | AISecondReviewer accepts only document, profile, ID and budget; does not receive review/store/runtime. Discussion sees released reviews only. |
-| Hidden AI → client | Separate store and explicit status projection; comparison/draft/discussion/decision routes guard release. Legacy `/runs` cannot read assessment IDs. |
-| Document → instruction/tool authority | System/user separation, strict qualitative outputs, fixed orchestration; no tool execution in second reviewer/discussion. Prompt protections remain probabilistic. |
-| App → inference | Exact university host allowlist, HTTPS/CA verification, secret server header, no redirects/proxy env; network/VPN/DNS ownership and server cloud disablement require IT controls. |
-| Model → workflow state | Model returns observations only, cannot choose transitions, skip criterion loop, approve findings or finalize. |
-| Decisions → final text | Human conclusion plus explicitly included findings only; discussion prose is not automatically included. |
-| Public egress → confidential core | No runtime public provider; default-deny contract only. Future service must receive approved query objects without internal mounts, credentials or full contexts. |
+## Ergänzung: Hochschulwissen und Bibliografie (27.11.2026)
 
-Threat scenarios: identity manipulation and fake quote support; document instructions
-to reveal prompts, issue unauthorized tools or force grades; source text carrying
-indirect instructions; premature result disclosure via generic endpoints; manipulated
-HF metadata; workload exhaustion; loss of volatile state. Security signals never
-reduce academic judgments automatically. Hidden PDF text, white font, OCR, metadata,
-image instructions and document anonymization remain unevaluated because this release
-has no real PDF/DOCX ingress. Do not infer protection from not seeing those attacks
-in text-only tests. Logs/errors must not record prompts, documents or bearer tokens.
+| STRIDE | Neuer Angriffspfad | Technische Kontrolle | Verbleibende Grenze |
+|---|---|---|---|
+| Spoofing | importierte Datei behauptet amtliche Freigabe | Import setzt CANDIDATE, separate hashgebundene Freigabe; keine Approval-API | Operator-/SSO-/Rollennachweis noch offen |
+| Tampering | Snapshot/Regelversion wird nach Review verändert | Originalhash, Profilfingerprint, erneute Cacheprüfung, exklusive Dateiablage | Host-/Kuratorrechte und Signaturprozess organisatorisch sichern |
+| Repudiation | unklarer Regel-/Quellenstand | Original-URL, Abrufzeit, Prüfumfang, Reviewerbeleg/Revision | manipulationsgeschütztes Produktionsaudit fehlt |
+| Information disclosure | DOI-Muster oder GROBID-Consolidation verraten private Forschung | lokaler Cache, geschlossener ResearchGateway, Parser-Pinning/Konsolidierung aus | tatsächlicher GROBID-/Host-DNS-/IPv6-Test offen |
+| Denial of service | ZIP/XML/PDF-Bombe oder riesiger Metadatenbestand | Dateityp-/Expansions-/Recordlimits, Entities aus, Ressourcenlimits | native Parser-Sandbox/Malwareprüfung für echte Dateien offen |
+| Elevation of privilege | Dokument fordert neue Quellen-/Agentenrechte oder andere Kohorte | serverseitige Scope-/Rechteprüfung, nicht öffentliche Bibliothek gesperrt | kompromittierter Prozess/Root bleibt außerhalb Appgarantie |
 
-Before real use: authenticate reviewer identity, authorize every assessment/document
-and approved internal source, add durable transactional state and audit integrity,
-review parser sandboxing/deletion, enforce university egress at the network boundary,
-and conduct adversarial tests with approved data. See PROD-1/RES-1 and risk register.
+Bibliografische Metadaten können fehlerhaft oder manipuliert sein; ein bestätigter
+DOI-Treffer ist kein Wahrheitsbeweis. Ergebnisse sind menschlich zu prüfen. Weitere
+Vertrauensgrenzen und Datenfluss siehe [Research Privacy](../research/research_privacy.md).
+
+Stand: 2026-11-26. Assets: Unternehmensgeheimnisse, Arbeiten, Identitäten,
+Bewertungen, Gutachten, Kontexte, Zugangsdaten und geschützte technische Audits.
+Aktuell existieren ausschließlich synthetische Dokumenteingänge und Mock-Inferenz.
+Datenflüsse: [Diagramm mit Vertrauensgrenzen](data_flow.md).
+
+Angreifer: unberechtigter Benutzer, Dokumentautor mit Prompt Injection,
+kompromittiertes Modell/Dependency, fehlerhaft konfigurierte Infrastruktur und
+privilegierter Innentäter. Ein kompromittierter Host/Betreiber kann Quellcode und
+Speicher verändern; die App behauptet keinen Schutz gegen Root oder beliebigen
+Python-Code im selben Prozess. Abhilfe braucht unabhängige Infrastrukturkontrollen.
+
+| Grenze / Bedrohung | Gelieferte Kontrolle | Restaufgabe |
+|---|---|---|
+| Browser → API: Identitätsspoofing, fremde IDs | keine Identitäts-/Rollenheader vertraut; Objekt-ACL; no-store; strikte Schemas | Hochschul-SSO und echte Benutzersitzungen; Demoidentität ist nicht mandantenfähig |
+| Dokument → Steuerung: Prompt Injection | Dokumente als Daten; keine Tools/Gradefreigaben; Hinweise ohne automatische Notenstrafe | echter PDF-/OCR-Angriffskorpus und Parser-Sandbox; Detektionsheuristik nicht vollständig |
+| Quelle → Ableitung: Taintverlust | RESTRICTED-Default, Maximumregel, immutable Label, serverseitige Outputs | neue Persistenz-/Embedding-/Exportpfade vor Einführung anbinden |
+| Parent → Child: Privilegienerweiterung | Factory und Registry prüfen gleiche Analyse, Klasse und Teilmengen; feste Toolliste | unabhängige Prozess-/Hostkontrollen gegen kompromittierten Code |
+| Workflow → Inferenz: Providerwechsel | obligatorischer Gateway, kein Fallback, Provider-Dispatchkontext; Defaultmock ohne I/O | Hochschule muss sichere echte Inferenz erst implementieren/abnehmen |
+| DNS/HTTP → Netzwerk: Rebinding, Proxy, Redirect, IP/Port/IPv6 | feste Ziele/IP-Mengen, IP-Pinning, keine Redirects/Umgebungsproxies | Hostfirewall inkl. Dockerresolver, UDP, IPv6/Link-local, Container→Host abnehmen |
+| Privater Kontext → Recherche | ResearchGateway ohne Client/Store verweigert alle Anfragen | isolierter Public-Service fehlt; keine aus Dokumenten abgeleitete Query freigeben |
+| Menschlicher Review → KI-Kontext | unabhängige Zweitbewertung bekommt keinen Erstreview; freie Kommentare RESTRICTED | KI-Diskussion bis Produktivfreigabe blockiert; menschlicher Ablauf verfügbar |
+| Verdecktes Ergebnis → Client | serverseitiges Erstbewertungs- und Freigabeembargo; explizite Projektionen | weiterhin keine Identitätstrennung zwischen echten Personen in der Demo |
+| Anwendung → Logs/Git/CI | inhaltsarme Audits, generische Fehler, Logger/Tracing aus; Ignores/DLP/Canaries | manipulationsgeschützte Auditablage, manuelle Prüfung; Pfad-DLP erkennt keine Geheimnisse in beliebigem Quelltext |
+| Speicher → Löschung/Backup | UUID-Pfade, exklusive Dateien, TTL/Delete/Orphan-Sweep | Verschlüsselung, Swap, Snapshots, Backuprestore und offizielle Archivierung offen |
+| Gewichte/Dependencies → Runtime | hashfixierte Python-Locks, HF-Reviewmetadaten, kein Runtime-Download/Remote Code | Gewichte tatsächlich gegen Hash/Digest prüfen, Signatur/Provenienz und Modelllizenz abnehmen |
+
+Sicherheitsentscheidungen sind keine akademischen Entscheidungen. Ein erkannter
+Manipulationshinweis darf nur zur menschlichen Sicherheitsprüfung führen. Freigaben
+für Datenzweck, Verarbeitung, Infrastruktur und konkrete Sperrvermerke bleiben
+getrennte organisatorische Nachweise. Tests und offene Punkte siehe
+[Ergebnisse](privacy_test_results.md) und [Readiness](production_readiness.md).

@@ -20,7 +20,7 @@ def click(app, label):
 def test_synthetic_human_first_review_through_ui(tmp_path):
     api = create_app(Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path))
     with (
-        patch("app.main.OllamaProvider", return_value=AssessmentProvider()),
+        patch("app.main.create_provider", return_value=AssessmentProvider()),
         TestClient(api) as client,
     ):
 
@@ -63,6 +63,8 @@ def test_synthetic_human_first_review_through_ui(tmp_path):
             assert any("AI_EMBARGO_MARKER" in text.value for text in app.text)
             app.text_area[0].set_value("Welche Gegenargumente sprechen gegen den Befund?")
             click(app, "Diskutieren")
+            assert app.error  # Confidential discussion cannot reach an unapproved model.
+            click(app, "Ohne KI-Diskussion menschlich prüfen")
             include = next(box for box in app.selectbox if box.label == "KI-Befund übernehmen?")
             assert include.value is None
             click(app, "Entscheidung versioniert speichern")

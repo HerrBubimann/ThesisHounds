@@ -27,7 +27,11 @@ services:
       BACKEND_URL: http://backend:8000
       FRONTEND_REQUEST_TIMEOUT: ${FRONTEND_REQUEST_TIMEOUT:-320}
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
-    networks: [frontend_api]
+    networks:
+      frontend_api:
+        ipv4_address: 172.30.10.3
+    dns: [127.0.0.1]
+    extra_hosts: ["backend:172.30.10.2"]
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=1770
     depends_on:
@@ -66,10 +70,21 @@ services:
       LANGSMITH_TRACING: "false"
       LANGCHAIN_TRACING_V2: "false"
       OTEL_SDK_DISABLED: "true"
+      SECURITY_MODE: DEVELOPMENT
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
     volumes:
       - ./config:/app/config:ro
     expose: ["8000"]
-    networks: [frontend_api, inference]
+    networks:
+      frontend_api:
+        ipv4_address: 172.30.10.2
+      inference:
+        ipv4_address: 172.30.20.2
+    dns: [127.0.0.1]
+    extra_hosts: ["ollama:172.30.20.3"]
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001,mode=1770
     depends_on:
@@ -101,7 +116,10 @@ services:
       OLLAMA_MAX_QUEUE: "4"
       OLLAMA_CONTEXT_LENGTH: ${LLM_CONTEXT_LENGTH:-4096}
     expose: ["11434"]
-    networks: [inference]
+    networks:
+      inference:
+        ipv4_address: 172.30.20.3
+    dns: [127.0.0.1]
     volumes:
       - ollama_models:/home/ollama/.ollama
     # Executable scratch space is needed by native inference runners.
@@ -118,8 +136,16 @@ services:
 networks:
   frontend_api:
     internal: true
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
   inference:
     internal: true
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24
 
 volumes:
   ollama_models:

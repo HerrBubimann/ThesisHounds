@@ -75,7 +75,7 @@ class WorkflowProvider:
 
                 assert (
                     DocumentInput.model_validate(payload["input"]).document.classification
-                    == "SYNTHETIC"
+                    == "PUBLIC"
                 )
                 category = payload["category"]
                 page = 2 if category == "methodology" else 1

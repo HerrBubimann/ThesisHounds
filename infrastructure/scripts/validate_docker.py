@@ -16,9 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 VARIANTS = {
     "cpu": ["compose.yaml"],
     "gpu": ["compose.yaml", "compose.gpu.yaml"],
-    "provision": ["compose.yaml", "compose.provision.yaml"],
+    "provision": ["compose.provision.yaml"],
     "ci-mock": ["compose.yaml", "compose.ci.yaml"],
     "university": ["compose.university.yaml"],
+    "grobid": ["compose.yaml", "compose.grobid.yaml"],
 }
 EXPECTED_SERVICES = {"frontend", "backend", "ollama"}
 REQUIRED_FILES = [
@@ -54,6 +55,15 @@ def render(files: list[str]) -> dict:
             **os.environ,
             **(
                 {
+                    "GROBID_IMAGE": "grobid/grobid@sha256:" + "a" * 64,
+                    "GROBID_CONFIG": str(ROOT / ".env.example"),
+                    "COMPOSE_PROFILES": "local-parser",
+                }
+                if "compose.grobid.yaml" in files
+                else {}
+            ),
+            **(
+                {
                     "OLLAMA_BASE_URL": "https://inference.example.invalid",
                     "UNIVERSITY_OLLAMA_HOSTS": '["inference.example.invalid"]',
                     "UNIVERSITY_INFERENCE_NETWORK": "synthetic-restricted-inference",
@@ -75,11 +85,15 @@ def check_variant(name: str, config: dict) -> list[str]:
     networks = config.get("networks", {})
     volumes = config.get("volumes", {}) or {}
     expected = EXPECTED_SERVICES - {"ollama"} if name == "university" else EXPECTED_SERVICES
+    if name == "grobid":
+        expected = expected | {"grobid"}
+    if name == "provision":
+        expected = {"model-provisioner"}
     if set(services) != expected:
         errors.append(f"services {sorted(services)} != {sorted(expected)}")
     for network_name, network in networks.items():
         internal = bool(network.get("internal"))
-        online_allowed = (name == "provision" and network_name == "inference") or (
+        online_allowed = (name == "provision" and network_name == "provisioning") or (
             name == "university" and network_name == "university_inference"
         )
         if internal == online_allowed:
@@ -122,7 +136,7 @@ def check_variant(name: str, config: dict) -> list[str]:
         build = service.get("build")
         if build and not (Path(build["context"]) / build.get("dockerfile", "Dockerfile")).exists():
             errors.append(f"{where}: Dockerfile missing")
-    ollama = services.get("ollama", {})
+    ollama = services.get("ollama", services.get("model-provisioner", {}))
     devices = (((ollama.get("deploy") or {}).get("resources") or {}).get("reservations") or {}).get(
         "devices"
     ) or []
@@ -147,6 +161,29 @@ def check_variant(name: str, config: dict) -> list[str]:
         for flag in ("ENABLE_PUBLIC_RESEARCH", "ENABLE_AI_SCORING"):
             if environment.get(flag) != "false":
                 errors.append(f"university: {flag}=false required")
+    if name == "grobid":
+        parser = services.get("grobid", {})
+        if not re.fullmatch(r"grobid/grobid@sha256:[0-9a-f]{64}", parser.get("image", "")):
+            errors.append("grobid: reviewed immutable upstream image digest required")
+        if parser.get("pull_policy") != "never" or parser.get("user") != "10001:10001":
+            errors.append("grobid: no downloads and non-root user required")
+        if parser.get("dns") != ["127.0.0.1"] or set(parser.get("networks", {})) != {
+            "document_processing"
+        }:
+            errors.append("grobid: isolated parser network and disabled external DNS required")
+        if parser.get("logging", {}).get("driver") != "none":
+            errors.append("grobid: content-capable container logging must be disabled")
+    if name == "provision":
+        provisioner = services.get("model-provisioner", {})
+        if set(provisioner.get("networks", {})) != {"provisioning"}:
+            errors.append("provision: processing networks must not be attached")
+        mounts = provisioner.get("volumes", [])
+        if len(mounts) != 1 or mounts[0].get("target") != "/home/ollama/.ollama":
+            errors.append("provision: only the reviewed model volume may be mounted")
+        if any(mount.get("type") != "volume" for mount in mounts):
+            errors.append("provision: bind mounts are forbidden")
+        if provisioner.get("user") != "10001:10001" or provisioner.get("ports"):
+            errors.append("provision: non-root and no published ports required")
     return errors
 
 

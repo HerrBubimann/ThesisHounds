@@ -1,5 +1,14 @@
 # CI/CD-Pipeline und Merge-Schutz
 
+Ergänzung 27.11.2026: Mosbach-/Import-/Quellen-/Snapshot-/Parsertests laufen in den
+bestehenden Suiten. `privacy-security` führt zusätzlich die Offlinebenchmarks
+`app.evaluation.privacy_lab` und `app.evaluation.academic_benchmark` aus. Der Job
+bleibt verpflichtend für `thesishounds-ci-gate`, ohne Skip- oder Fehlerausnahme.
+Docker-E2E prüft Kohorte, Kandidatengate, Embargo und menschliche Prüfentscheidung;
+der Compose-Validator ergänzt die optionale Parserkonfiguration statisch.
+Lokale Ergebnisse sind kein erfolgter GitHub-Lauf. Aktiver Mergeschutz setzt ein
+Repository-Ruleset/Branch Protection voraus; bestehende Rulesets wurden nicht verändert.
+
 Die Pipeline in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) prüft jede Änderung, bevor sie in `main` gelangt. Verbindlich ist ein einziger Status Check: **`thesishounds-ci-gate`**. Er ist nur grün, wenn alle Pflicht-Jobs tatsächlich erfolgreich waren.
 
 ## Auslöser
@@ -233,3 +242,16 @@ Ergebnis mit Datum in [`validation.md`](validation.md) festhalten.
 | `docker-build` Smoke rot | Abschnitt „Container status on failure“ im Log ansehen; lokal `make docker-smoke` |
 | Gate rot, alle Jobs grün | Fehlender Bericht oder übersprungene Tests; die Gate-Summary nennt die Ursache. |
 | Check „Expected – waiting“ im PR | Workflow lief nicht (z. B. Syntaxfehler in `ci.yml`): Tab *Actions* prüfen. |
+## Privacy-Security-Erweiterung (2026-11-26)
+
+Der neue verpflichtende Job `privacy-security` führt Gitindex-DLP und sämtliche
+synthetischen Datenschutzregressionen aus. `thesishounds-ci-gate` benötigt den Job
+und dessen `junit-privacy.xml`; fehlende, leere, fehlgeschlagene oder übersprungene
+Tests lassen das Gate fehlschlagen. Der bestehende Name des Required Checks und
+das Ruleset bleiben unverändert. Die tatsächliche Aktivierung auf GitHub wurde
+in dieser lokalen Änderung nicht überprüft.
+
+Der Docker-Build-Job prüft zusätzlich eine kontrollierte öffentliche Mockadresse
+aus allen drei privaten Netzwerk-Namespaces. Dies ist eine CI-Prüfung, keine
+Hochschulnetzabnahme. Aktuelle Grenzen und lokale Ergebnisse:
+[Privacy-Testbericht](security/privacy_test_results.md).

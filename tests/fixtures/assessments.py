@@ -19,7 +19,9 @@ class AssessmentProvider(WorkflowProvider):
         await asyncio.sleep(self.delay)
         if self.fail:
             return Completion(text='{"points": 100}', model=model.name)
-        if "answer" in output_schema["properties"]:
+        if "verdict" in output_schema["properties"]:
+            data = {"verdict": "SUPPORTED", "rationale": "MOCK: synthetic verification only."}
+        elif "answer" in output_schema["properties"]:
             data = {"answer": "MOCK: Die Belege sind begrenzt; Gegenargumente sind zu prüfen."}
         else:
             data = {

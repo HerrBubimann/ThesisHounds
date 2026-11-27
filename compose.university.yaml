@@ -50,6 +50,8 @@ services:
     mem_limit: ${BACKEND_MEMORY:-1g}
     environment:
       DEPLOYMENT_MODE: university
+      # Intentionally refuses startup until the missing production adapters are delivered.
+      SECURITY_MODE: UNIVERSITY_SECURE
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?Approved university HTTPS endpoint required}
       UNIVERSITY_OLLAMA_HOSTS: ${UNIVERSITY_OLLAMA_HOSTS:?Exact approved host list required}
       OLLAMA_AUTH_TOKEN: ${OLLAMA_AUTH_TOKEN:-}

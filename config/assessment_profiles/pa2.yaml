@@ -3,6 +3,7 @@ id: pa2-example
 work_type: PA2
 version: "0.1"
 status: EXAMPLE
+data_classification: PUBLIC
 source: "ThesisHounds synthetic MVP example, 2026-11-26"
 subject_notes: "Exploratives Beispiel für PA2; fachliche Vertiefung noch abzustimmen."
 criteria:

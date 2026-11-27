@@ -1,4 +1,4 @@
-"""Reproducible end-to-end smoke test of the running stack against the mock Ollama service.
+"""Reproducible end-to-end smoke test of the running synthetic development stack.
 
 Prerequisite (CI and local, needs Docker):
     docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --pull never --wait
@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ["docker", "compose", "-f", "compose.yaml", "-f", "compose.ci.yaml"]
 
 FRONTEND_CHECK = r"""
-import json, time, urllib.request
+import json, time, urllib.request, urllib.error
 
 def call(path, data=None, timeout=30):
     request = urllib.request.Request(
@@ -28,14 +28,16 @@ def call(path, data=None, timeout=30):
         return json.load(response)
 
 urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=10)
+from frontend.api_client import request_backend
+assert request_backend('GET', '/health')['status'] == 'ok'
 print('OK  frontend healthy')
 assert call('/health')['status'] == 'ok'
 print('OK  frontend -> backend /health')
 status = call('/api/v1/status')
 assert status['ollama'] == 'available' and status['model_available'], status
-print('OK  backend -> mock ollama, model', status['model'], 'available')
-answer = call('/api/v1/chat', {'prompt': 'Synthetischer CI-Test'})['answer']
-assert answer.startswith('MOCK'), 'chat did not reach the mock service'
+print('OK  backend synthetic provider, model', status['model'], 'available')
+answer = call('/api/v1/chat', {'prompt': 'Test'})['answer']
+assert answer.startswith('MOCK'), 'mock answer missing'
 print('OK  chat round trip (mock answer)')
 run = call('/api/v1/runs', {'mode': 'D', 'document_id': 'synthetic-demo'})
 deadline = time.monotonic() + 120
@@ -49,16 +51,55 @@ dynamic = sum(node['dynamic'] for node in graph['nodes'])
 assert dynamic >= 1, 'no dynamic subagent was created'
 print(f"OK  synthetic workflow D: {run['findings_count']} findings, {dynamic} dynamic agents,"
       f" {run['model_calls']} mock model calls, waiting for human review")
-"""
-
-EGRESS_CHECK = r"""
-import socket
-try:
-    socket.create_connection(('1.1.1.1', 443), timeout=3).close()
-except OSError:
-    print('OK  backend has no internet egress (internal networks)')
-else:
-    raise SystemExit('backend unexpectedly reached the internet')
+assessment = call('/api/v1/assessments', {'work_type': 'PA1', 'profile_id': 'pa1-example',
+    'program': 'data_science_ai', 'cohort': 'DS25'})
+assert assessment['institutional_rules']['profile']['cohort'] == 'DS25'
+assert assessment['institutional_rules']['status'] == 'MANUAL_REVIEW_REQUIRED'
+assert not any(rule['active'] for rule in assessment['institutional_rules']['rules'])
+path = '/api/v1/assessments/' + assessment['id']
+call(path + '/ai-review', {})
+deadline = time.monotonic() + 120
+while time.monotonic() < deadline:
+    state = call(path)
+    if state['ai_state'] not in {'PENDING', 'RUNNING'}:
+        break
+    time.sleep(0.2)
+assert state['ai_state'] == 'COMPLETED', 'criterion review did not complete'
+for embargoed in ('/comparison', '/academic-checks'):
+    try:
+        call(path + embargoed)
+    except urllib.error.HTTPError as error:
+        assert error.code == 409
+    else:
+        raise AssertionError('independent review embargo was bypassed')
+call(path + '/human-review', {'release': True, 'criteria': [
+    {'criterion_id': c['id'], 'judgment': 'MIXED', 'observations': 'Synthetic first review',
+     'rationale': 'Synthetic independent human rationale'}
+    for c in assessment['profile']['criteria']
+]})
+call(path + '/release', {'confirmed': True})
+comparison = call(path + '/comparison')
+academic = call(path + '/academic-checks')
+assert academic['external_requests'] == 0
+assert all(row['status'] == 'MANUAL_REVIEW_REQUIRED' for row in academic['formal']['checks'])
+call(path + '/academic-decisions', {'finding_id': academic['formal']['checks'][0]['finding_id'],
+    'decision': 'ACCEPTED', 'rationale': 'Synthetic human note; no official release'})
+assert comparison['coverage']['complete']
+assert any(row['ai']['supplemental'] for row in comparison['criteria'])
+assert all(row['ai']['verification_rounds'] for row in comparison['criteria'])
+finding = comparison['criteria'][0]['ai']
+evidence = call(path + '/findings/' + finding['finding_id'] + '/evidence')
+assert evidence['matched'] and evidence['quote'] in evidence['original_text']
+call(path + '/manual-review', {'confirmed': True})
+for row in comparison['criteria']:
+    call(path + '/decisions', {'criterion_id': row['criterion_id'],
+        'include_ai_finding': False, 'conclusion': 'Synthetic human conclusion',
+        'rationale': 'Synthetic final rationale'})
+draft = call(path + '/finalize', {'confirmed': True})
+assert draft['label'] == 'Menschlich freigegeben'
+assert 'MOCK:' not in draft['text']
+print('OK  criterion E: routing, coverage, supplements, verification, evidence, human final')
+print('OK  Mosbach DS25: candidates, conflicts, embargoed offline checks, human decision')
 """
 
 
@@ -71,7 +112,8 @@ def run_in(service: str, code: str) -> None:
 
 def main() -> None:
     run_in("frontend", FRONTEND_CHECK)
-    run_in("backend", EGRESS_CHECK)
+    # Egress is tested separately against the controlled listener created by
+    # infrastructure/security/scripts/network_acceptance.py, never a public IP.
     print("E2E smoke test passed.")
 
 

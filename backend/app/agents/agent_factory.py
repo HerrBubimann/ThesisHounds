@@ -52,8 +52,12 @@ class AgentFactory:
         ):
             raise LLMError(429, "Agentenspezifikation überschreitet das Ausführungsbudget.")
         validate_tools(spec.allowed_tools, self.config.policy.config.allowed_tools)
+        if not set(spec.allowed_tools) <= parent.allowed_tools:
+            raise LLMError(403, "Subagent darf Parent-Werkzeuge nicht erweitern.")
+        if spec.model_id not in parent.allowed_models:
+            raise LLMError(403, "Subagent darf Parent-Modellfreigaben nicht erweitern.")
         model = self.config.models.get(spec.model_id, "specialist")
-        self.config.policy.check(model, "CONFIDENTIAL", "specialist")
+        self.config.policy.check(model, parent.data_classification, "specialist")
         record = AgentRecord(
             agent_id=f"{parent.run_id}_{spec.agent_id}",
             run_id=parent.run_id,
@@ -66,5 +70,10 @@ class AgentFactory:
             depth=parent.depth + 1,
             dynamic=dynamic,
             specification=spec,
+            data_classification=parent.data_classification,
+            allowed_models=parent.allowed_models,
+            allowed_tools=frozenset(spec.allowed_tools),
+            allowed_documents=parent.allowed_documents,
+            allowed_network_targets=parent.allowed_network_targets,
         )
         return record, spec

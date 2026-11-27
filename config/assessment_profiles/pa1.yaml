@@ -3,6 +3,7 @@ id: pa1-example
 work_type: PA1
 version: "0.1"
 status: EXAMPLE
+data_classification: PUBLIC
 source: "ThesisHounds synthetic MVP example, 2026-11-26"
 subject_notes: "Exploratives Beispiel für PA1; Erwartungen mit Gutachtern klären."
 criteria:

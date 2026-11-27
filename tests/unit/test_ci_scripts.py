@@ -19,7 +19,7 @@ def junit(path, tests=3, failures=0, errors=0, skipped=0):
 
 @pytest.fixture
 def reports(tmp_path, monkeypatch):
-    for suite in ("unit", "integration", "security"):
+    for suite in ("unit", "integration", "security", "privacy"):
         junit(tmp_path / f"junit-{suite}.xml")
     (tmp_path / "coverage.xml").write_text(
         '<coverage lines-valid="10" lines-covered="9" branches-valid="0" branches-covered="0"/>',
@@ -137,7 +137,8 @@ def test_docker_validator_rejects_external_network():
     bad = config()
     bad["networks"]["inference"]["internal"] = False
     assert validate_docker.check_variant("cpu", bad)
-    assert validate_docker.check_variant("provision", bad) == []
+    # Provisioning may never admit a processing stack connected to an online network.
+    assert validate_docker.check_variant("provision", bad)
 
 
 def test_repository_dockerfiles_and_env_are_valid():

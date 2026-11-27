@@ -28,6 +28,20 @@ class AgentRegistry:
                 raise LLMError(429, "Supervisor-Limit erreicht.")
             if sum(a.role == "specialist" for a in proposed) > self.remaining_specialists(run_id):
                 raise LLMError(429, "Subagentenlimit erreicht.")
+        proposed_by_id = {**self.records, **{r.agent_id: r for r in records}}
+        for child in records:
+            if child.parent_agent:
+                parent = proposed_by_id.get(child.parent_agent)
+                if (
+                    parent is None
+                    or parent.run_id != child.run_id
+                    or not child.allowed_models <= parent.allowed_models
+                    or not child.allowed_tools <= parent.allowed_tools
+                    or not child.allowed_documents <= parent.allowed_documents
+                    or not child.allowed_network_targets <= parent.allowed_network_targets
+                    or child.data_classification != parent.data_classification
+                ):
+                    raise LLMError(403, "AGENT_INHERITANCE_DENIED")
         # No await between the quota checks and insertion: atomic on the runtime event loop.
         self.records.update((record.agent_id, record) for record in records)
         return records

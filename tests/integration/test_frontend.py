@@ -46,7 +46,7 @@ def test_dashboard_and_chat() -> None:
         app = AppTest.from_file(APP_PATH, default_timeout=10).run()
         assert not app.exception
         assert app.title[0].value == "ThesisHounds"
-        app.text_area[0].set_value("Test")
+        assert app.text_area[0].disabled and app.text_area[0].value == "Test"
         app.button[1].click().run()
         assert not app.exception
         assert app.text[0].value == "Testantwort"
@@ -63,7 +63,7 @@ def test_dashboard_when_backend_is_down() -> None:
 
 
 def test_frontend_client_sanitizes_upstream_errors() -> None:
-    with patch("httpx.Client.request", return_value=httpx.Response(503, text="PRIVATE_UPSTREAM")):
+    with patch("httpx.Client.send", return_value=httpx.Response(503, text="PRIVATE_UPSTREAM")):
         with pytest.raises(BackendError) as error:
             request_backend("GET", "/api/v1/models")
         assert "PRIVATE_UPSTREAM" not in str(error.value)

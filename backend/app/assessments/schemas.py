@@ -11,6 +11,14 @@ class AssessmentRequest(StrictModel):
     work_type: Literal["PA1", "PA2", "BA"]
     profile_id: str = Field(min_length=1, max_length=40)
     document_id: Literal["synthetic-demo"] = "synthetic-demo"
+    program: Literal["data_science_ai", "wirtschaftsinformatik"] = "data_science_ai"
+    cohort: str | None = Field(default=None, pattern=r"^(DS|WI)[0-9]{2}$")
+
+
+class AcademicDecision(StrictModel):
+    finding_id: str = Field(min_length=1, max_length=100)
+    decision: Literal["ACCEPTED", "REJECTED"]
+    rationale: str = Field(min_length=1, max_length=1000)
 
 
 class CriterionReview(StrictModel):
@@ -46,9 +54,22 @@ class AIObservation(StrictModel):
     page: int | None = Field(default=None, ge=1)
     quote: str = Field(default="", max_length=800)
     uncertainty: Literal["LOW", "HIGH", "UNKNOWN"] = "UNKNOWN"
+    claim_type: Literal["TEXT", "ABSENCE"] = "TEXT"
+    required_context: list[int] = Field(default_factory=list, max_length=100)
+
+
+class AdversarialChallenge(StrictModel):
+    verdict: Literal["SUPPORTED", "UNSUPPORTED", "UNCERTAIN"]
+    rationale: str = Field(min_length=1, max_length=600)
+    counterargument: str = Field(default="", max_length=600)
+    missing_context: bool = False
+    proposed_correction: str = Field(default="", max_length=600)
+    counter_page: int | None = Field(default=None, ge=1)
+    counter_quote: str = Field(default="", max_length=800)
 
 
 class AssessmentFinding(AIObservation):
+    data_classification: Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] = "RESTRICTED"
     finding_id: str = Field(default_factory=lambda: str(uuid4()))
     assessment_id: str
     criterion_id: str
@@ -57,9 +78,26 @@ class AssessmentFinding(AIObservation):
     manufacturer: str
     agent_id: str
     reviewer_model: str | None = None
-    evidence_status: Literal["QUOTE_MATCHED", "UNVERIFIED"] = "UNVERIFIED"
+    evidence_status: Literal[
+        "QUOTE_MATCHED", "UNVERIFIED", "REJECTED", "CONTEXT_REQUIRED", "ABSENCE_UNPROVEN"
+    ] = "UNVERIFIED"
     sources: list[dict] = Field(default_factory=list)
     human_approval: Literal["PENDING"] = "PENDING"
+    chapter: str | None = None
+    block_id: str | None = None
+    source_start: int | None = None
+    source_end: int | None = None
+    evidence_detail: str = ""
+    model_digest: str = ""
+    mocked: bool = True
+    routing: dict = Field(default_factory=dict)
+    verification_status: Literal[
+        "NOT_REQUESTED", "MODEL_SUPPORTED", "UNRESOLVED", "CHALLENGED", "UNAVAILABLE"
+    ] = "NOT_REQUESTED"
+    verification_rounds: list[dict] = Field(default_factory=list, max_length=2)
+    conflict: bool = False
+    origin: Literal["MANDATORY", "ADAPTIVE"] = "MANDATORY"
+    supplemental: list["AssessmentFinding"] = Field(default_factory=list, max_length=6)
 
 
 class DiscussionRequest(StrictModel):
@@ -76,6 +114,7 @@ class CriterionDecision(StrictModel):
     include_ai_finding: bool  # Deliberately no preselected agreement.
     conclusion: str = Field(min_length=1, max_length=1000)
     rationale: str = Field(min_length=1, max_length=1000)
+    include_finding_ids: list[str] = Field(default_factory=list, max_length=7)
 
 
 class ExplicitRelease(StrictModel):

@@ -50,6 +50,9 @@ class ModelDefinition(BaseModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,39}$")
     name: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,199}$")
     manufacturer: str = Field(min_length=1, max_length=100)
+    version: str | None = Field(default=None, min_length=1, max_length=100)
+    expected_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    weights_origin: str | None = Field(default=None, min_length=1, max_length=500)
     provider: str
     local: bool
     enabled: bool = True
@@ -59,6 +62,16 @@ class ModelDefinition(BaseModel):
     estimated_vram_gib: float = Field(ge=0)
     allowed_roles: list[Role]
     privacy: Literal["CONFIDENTIAL", "PUBLIC", "SYNTHETIC"] = "CONFIDENTIAL"
+    deployment_type: Literal["LOCAL", "UNIVERSITY", "EXTERNAL"] = "EXTERNAL"
+    approved_endpoint: str = ""
+    data_processing_location: str = "UNVERIFIED"
+    allowed_classifications: list[Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]] = []
+    network_access: Literal["NONE", "APPROVED_INFERENCE_ONLY", "EXTERNAL"] = "EXTERNAL"
+    telemetry_enabled: bool = True
+    cloud_features_enabled: bool = True
+    license_status: Literal["UNREVIEWED", "APPROVED", "REJECTED"] = "UNREVIEWED"
+    security_review_status: Literal["UNREVIEWED", "DEVELOPMENT_ONLY", "APPROVED"] = "UNREVIEWED"
+    approval_status: Literal["UNAPPROVED", "DEVELOPMENT_ONLY", "APPROVED"] = "UNAPPROVED"
     huggingface: HuggingFaceArtifact | None = None
 
     @model_validator(mode="after")

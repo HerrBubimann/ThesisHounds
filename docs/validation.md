@@ -78,7 +78,7 @@ CI ist für Mock-Tests, Builds, Compose-Validierung und modellfreien Containerst
 ```powershell
 # Im vorbereiteten Windows-Checkout; .env nur kopieren, falls noch nicht vorhanden:
 Copy-Item .env.example .env
-.\.venv\Scripts\python.exe infrastructure/scripts/provision.py
+docker compose build
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 .\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --chat
 .\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --analysis --mode D

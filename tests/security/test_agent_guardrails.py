@@ -38,6 +38,9 @@ def supervisor(registry: AgentRegistry, agent_id="sup", role="methodology", dept
             task="synthetic",
             depth=depth,
             can_delegate=True,
+            data_classification="PUBLIC",
+            allowed_models=frozenset({"mistral"}),
+            allowed_documents=frozenset({"synthetic-demo"}),
         )
     )
 

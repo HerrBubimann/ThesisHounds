@@ -13,7 +13,7 @@ def test_control_api_run_graph_findings_and_human_review(tmp_path):
         Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path / "documents")
     )
     with (
-        patch("app.main.OllamaProvider", return_value=WorkflowProvider()),
+        patch("app.main.create_provider", return_value=WorkflowProvider()),
         TestClient(application) as client,
     ):
         application.state.runtime.mocked = True
@@ -65,7 +65,7 @@ def test_api_cancellation(tmp_path):
         Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path / "documents")
     )
     with (
-        patch("app.main.OllamaProvider", return_value=WorkflowProvider(delay=60)),
+        patch("app.main.create_provider", return_value=WorkflowProvider(delay=60)),
         TestClient(application) as client,
     ):
         run = client.post("/api/v1/runs", json={}).json()

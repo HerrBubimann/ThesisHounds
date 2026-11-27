@@ -1,17 +1,32 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.security.classification import Classification, classify
+from app.security.sperrvermerk_detector import detect_sperrvermerk
 
 
 class Document(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
     document_id: str
-    classification: str = "CONFIDENTIAL"
+    analysis_id: str = ""
+    classification: Classification = Classification.RESTRICTED
     pages: dict[int, str]
     complete: bool = False
     digest: str = ""
+
+    @field_validator("classification", mode="before")
+    @classmethod
+    def safe_classification(cls, value):
+        return classify(value)
+
+    @property
+    def sperrvermerk(self):
+        return detect_sperrvermerk(self.pages)
 
 
 SYNTHETIC_PAGES = {
@@ -37,6 +52,8 @@ class DocumentStore:
     """Only server-generated synthetic documents are ingestible in this release."""
 
     def __init__(self, root: Path):
+        if root.is_symlink():
+            raise ValueError("STORE_SYMLINK_DENIED")
         self.root = root
 
     def path(self, run_id: str) -> Path:
@@ -46,13 +63,16 @@ class DocumentStore:
         encoded = json.dumps(SYNTHETIC_PAGES, ensure_ascii=False, sort_keys=True)
         document = Document(
             document_id="synthetic-demo",
-            classification="SYNTHETIC",
-            pages=SYNTHETIC_PAGES,
+            analysis_id=run_id,
+            classification="PUBLIC",
+            pages=dict(SYNTHETIC_PAGES),
             complete=True,
             digest=hashlib.sha256(encoded.encode()).hexdigest(),
         )
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.path(run_id).write_text(document.model_dump_json(), encoding="utf-8")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(self.path(run_id), flags, 0o600), "w", encoding="utf-8") as stream:
+            stream.write(document.model_dump_json())
         return document
 
     def remove(self, run_id: str) -> None:

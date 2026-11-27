@@ -44,7 +44,7 @@ def test_chat_contract_and_no_content_in_logs(client_factory, caplog) -> None:
         assert payload["model"] == "qwen3:8b"
         assert payload["stream"] is False
         assert payload["think"] is False
-        assert payload["messages"] == [{"role": "user", "content": "PRIVATE_PROMPT"}]
+        assert payload["messages"] == [{"role": "user", "content": "Test"}]
         assert payload["options"]["num_predict"] == 512
         assert request.extensions["timeout"]["read"] == 300
         return httpx.Response(
@@ -53,7 +53,7 @@ def test_chat_contract_and_no_content_in_logs(client_factory, caplog) -> None:
         )
 
     client = client_factory(handler)
-    response = client.post("/api/v1/chat", json={"prompt": "PRIVATE_PROMPT"})
+    response = client.post("/api/v1/chat", json={"prompt": "Test"})
     assert response.status_code == 200
     assert response.json() == {"model": "qwen3:8b", "answer": "PRIVATE_ANSWER"}
     assert "PRIVATE_PROMPT" not in caplog.text
@@ -122,7 +122,7 @@ def test_chat_upstream_http_failure(client_factory, status_code, expected) -> No
             return httpx.Response(200, json={"models": [MODEL]})
         return httpx.Response(status_code, json={"error": "PRIVATE_PROMPT"})
 
-    response = client_factory(handler).post("/api/v1/chat", json={"prompt": "PRIVATE_PROMPT"})
+    response = client_factory(handler).post("/api/v1/chat", json={"prompt": "Test"})
     assert response.status_code == expected
     assert "PRIVATE_PROMPT" not in response.text
 
@@ -141,4 +141,4 @@ def test_invalid_chat_response(client_factory, data) -> None:
             200, json={"models": [MODEL]} if request.url.path == "/api/tags" else data
         )
 
-    assert client_factory(handler).post("/api/v1/chat", json={"prompt": "test"}).status_code == 502
+    assert client_factory(handler).post("/api/v1/chat", json={"prompt": "Test"}).status_code == 502

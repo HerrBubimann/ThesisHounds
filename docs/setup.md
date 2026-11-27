@@ -1,5 +1,13 @@
 # Einrichtung, API und Serverbetrieb
 
+Sicherheitsänderung 2026-11-26: `docker compose up` startet ausschließlich die
+synthetische Mock-Demo. Modell-Provisioning ist dafür nicht erforderlich.
+`compose.university.yaml` verweigert derzeit den Start (UNIVERSITY_SECURE).
+Freier Chat ist gesperrt, der Testprompt lautet exakt `Test`. Maßgeblich sind
+[Produktionsblocker](security/production_readiness.md) und
+[Privacy-Architektur](security/privacy_architecture.md). Folgende ältere
+Inferenz-/Hochschulbeispiele sind keine Freigabe echter Arbeiten.
+
 ## Betriebssysteme
 
 Windows benötigt Python 3.12, Git und Docker Desktop mit Linux-Containern, WSL2-Backend und aktivierter Virtualisierung. Prüfen: `py -3.12 --version`, `docker version`, `docker compose version`. In einer WSL-Distribution eine eigene Linux-Umgebung verwenden, nicht die Windows-`.venv`.
@@ -17,7 +25,7 @@ Windows:
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-dev.lock
-.\.venv\Scripts\python.exe infrastructure/scripts/provision.py
+docker compose build
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 .\.venv\Scripts\python.exe infrastructure/scripts/smoke.py --analysis --mode D
 ```
@@ -27,23 +35,31 @@ Linux/macOS:
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
-.venv/bin/python infrastructure/scripts/provision.py
+docker compose build
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 .venv/bin/python infrastructure/scripts/smoke.py --analysis --mode D
 ```
 
-Die Bereitstellung lädt alle aktivierten lokalen Ollama-Modelle der Registry, baut alle Images und entfernt abschließend das temporäre Online-Netz. Der Einzelchat-Tag `LLM_MODEL` muss ebenfalls in der Registry freigegeben sein. Das vorhandene Modell-Volume wird unverändert weiterverwendet. Keine automatische Migration fremder Root-Volumes; Berechtigungen vor Übernahme gezielt prüfen.
+Die Mock-Demo benötigt keine Modellgewichte. Optionales Provisioning verweigert die
+mitgelieferte DEVELOPMENT_ONLY-Registry: Lizenz-/Sicherheitsfreigabe, Modellversion,
+Gewichtsherkunft und vollständiger `expected_digest` müssen vorher bestätigt werden.
+Nach dokumentierter Freigabe verwendet `infrastructure/scripts/provision.py` nur
+das eigenständige Projekt `compose.provision.yaml`. Ein aktives Modell-Volume wird
+nicht geändert; die Anwendung wird nicht automatisch gestoppt. Der volle Digest
+wird nach dem Download lokal geprüft. Keine automatische Volume-Migration.
 
 ### Unterbrochene Bereitstellung
 
 Nach hartem Abbruch oder fehlgeschlagenem Cleanup:
 
 ```bash
-docker compose -f compose.yaml -f compose.provision.yaml down --remove-orphans
+docker compose --project-name thesishounds-provisioning -f compose.provision.yaml down --remove-orphans
 docker compose up -d --no-build --pull never --wait --wait-timeout 180
 ```
 
-Kein `-v` verwenden: Das Modell-Volume muss bestehen bleiben. Fehlt ein Modell, die Bereitstellung erneut starten. Niemals den kompletten Analyse-Stack mit dem Provisionierungs-Override für vertrauliche Daten betreiben.
+Kein `-v` verwenden: Das Modell-Volume bleibt bestehen. Vor einem erneuten Versuch
+Freigabe und Digest prüfen. Eine fehlgeschlagene Prüfung autorisiert keine Inferenz.
+Die Provisioning-Datei ist kein Runtime-Override; Verarbeitungsnetze bleiben intern.
 
 ## Konfiguration und Ressourcen
 

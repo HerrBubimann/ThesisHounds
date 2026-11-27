@@ -12,7 +12,9 @@ from tests.fixtures.providers import runtime
 def test_agent_parallelism_and_timeout(tmp_path):
     async def scenario():
         app = runtime(tmp_path)
-        run = RunRecord(mode="D", document_id="synthetic-demo", criteria=["Test"])
+        run = RunRecord(
+            mode="D", document_id="synthetic-demo", criteria=["Test"], data_classification="PUBLIC"
+        )
         active, maximum = 0, 0
 
         async def operation():
@@ -44,9 +46,16 @@ def test_bounded_retry_and_token_reservation(tmp_path):
 
     async def scenario():
         app = runtime(tmp_path)
-        run = RunRecord(mode="D", document_id="synthetic-demo", criteria=["Test"])
+        run = RunRecord(
+            mode="D", document_id="synthetic-demo", criteria=["Test"], data_classification="PUBLIC"
+        )
         agent = app.orchestrator.record(run, "reviewer", "qwen", "Retry", "Test")
-        document = Document(document_id="d", pages=SYNTHETIC_PAGES, classification="SYNTHETIC")
+        document = Document(
+            document_id="synthetic-demo",
+            analysis_id=run.run_id,
+            pages=SYNTHETIC_PAGES,
+            classification="PUBLIC",
+        )
 
         class InvalidProvider:
             calls = 0
@@ -65,7 +74,7 @@ def test_bounded_retry_and_token_reservation(tmp_path):
         assert provider.calls == 2 and agent.model_calls == 2
         assert budget.unknown_token_calls == 2
         with pytest.raises(LLMError) as error:
-            await app.gateway.complete("qwen", "reviewer", "SYNTHETIC", [], CallBudget(1, 100))
+            await app.gateway.complete("qwen", "reviewer", "PUBLIC", [], CallBudget(1, 100))
         assert error.value.status_code == 429 and provider.calls == 2
         await app.close()
 

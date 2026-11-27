@@ -45,6 +45,7 @@ def review_context(tmp_path):
         ],
     )
     app.runs[run.run_id], app.findings[run.run_id] = run, [finding]
+    app.access.create(run.run_id)
     try:
         yield app, run, finding
     finally:

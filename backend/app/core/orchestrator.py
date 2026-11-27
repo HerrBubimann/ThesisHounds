@@ -76,6 +76,14 @@ class MasterOrchestrator:
                 parent_agent=parent.agent_id if parent else None,
                 depth=parent.depth + 1 if parent else 0,
                 can_delegate=delegate,
+                data_classification=run.data_classification,
+                allowed_models=parent.allowed_models
+                if parent
+                else frozenset(m.id for m in self.config.models.enabled()),
+                allowed_documents=parent.allowed_documents
+                if parent
+                else frozenset({run.document_id}),
+                allowed_network_targets=frozenset(),
             )
         )
 
@@ -223,6 +231,7 @@ class MasterOrchestrator:
                         model_id=model.id,
                         model=model.name,
                         manufacturer=model.manufacturer,
+                        data_classification=document.classification,
                     )
                 )
 

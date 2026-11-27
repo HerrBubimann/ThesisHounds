@@ -69,3 +69,23 @@ Ein Approval bestätigt, dass der Reviewer die Änderung verstanden hat. Es ist 
 ## Dokumentation
 
 Betroffene Doku im selben PR aktualisieren: [README](../README.md), [Architektur](architecture.md), [Setup](setup.md), [Sicherheit](security.md), [CI/CD](ci-cd.md). Tatsächlich durchgeführte Abnahmen kommen mit Datum in [validation.md](validation.md). Es werden keine Ergebnisse behauptet, die nicht ausgeführt wurden.
+## Vertrauliche Daten und Entwicklungswerkzeuge
+
+Keine echten Arbeiten, Unternehmensinformationen, Gutachten, privaten Chatverläufe,
+Embeddings oder vertraulichen Screenshots in Git, GitHub Actions, Issues, PRs,
+IDE-/Coding-Assistenten oder externe Debugdienste übernehmen. Das gilt auch für
+private Repositories und zusammengefasste/pseudonymisierte Inhalte. Nur serverseitige
+synthetische Fixtures oder nachweislich öffentliche Daten verwenden.
+
+`.gitignore` schützt weder bereits indexierte Dateien noch Kopieren/Uploads.
+Der lokale Pre-Commit-DLP-Hook prüft den gesamten Index einschließlich ignorierter,
+erzwungen hinzugefügter Dateien. Mit vorhandenem `pre-commit`:
+`pre-commit install`; unabhängig davon vor Commit:
+`python infrastructure/scripts/privacy_dlp.py`. CI führt dieselbe verpflichtende
+Prüfung aus; Hooks können lokal umgangen werden und ersetzen keinen Review.
+Pfad-DLP erkennt keine beliebigen Geheimnisse in Quelltext. Vor Push den Index
+prüfen, vorhandenes Secret Scanning beachten und `.dockerignore`-Allowlist erhalten.
+
+Bereits eingecheckte vertrauliche Dateien sind ein Sicherheitsvorfall, keine normale
+Ignore-Korrektur: [Incident Response](security/incident_response.md). Dokumentablage
+außerhalb des Repositorys; keine vertraulichen Daten in Testberichten oder Logs.

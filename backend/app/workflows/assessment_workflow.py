@@ -7,11 +7,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
+from app.agents.academic_review import AcademicReviewServices
 from app.assessments.ai_review import AISecondReviewer
 from app.assessments.comparison import compare
+from app.assessments.coverage import check_coverage
 from app.assessments.profile_registry import AssessmentProfile, ProfileRegistry
 from app.assessments.routine_checks import inventory
 from app.assessments.schemas import (
+    AcademicDecision,
     AssessmentFinding,
     AssessmentRequest,
     CriterionDecision,
@@ -21,10 +24,17 @@ from app.assessments.schemas import (
 )
 from app.config import Settings
 from app.core.configuration import RuntimeConfig
+from app.knowledge.registry import InstitutionalRegistry
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
+from app.research.local_verification import verify_local_sources
+from app.research.snapshot_store import load_cache
 from app.schemas.domain import now
+from app.security.access_control import AccessControl
+from app.security.classification import Classification, combine
+from app.security.information_flow import InformationLabel
 from app.security.injection_detection import detect_injection
+from app.services.document_intelligence import structure_document
 from app.services.document_store import SYNTHETIC_PAGES, Document
 
 
@@ -44,6 +54,11 @@ class Assessment:
     audit: list[dict] = field(default_factory=list)
     terminal: str | None = None
     busy: bool = False
+    classification: Classification = Classification.PUBLIC
+    program: str = "data_science_ai"
+    cohort: str | None = None
+    institutional_rules: dict = field(default_factory=dict)
+    academic_decisions: list[dict] = field(default_factory=list)
 
 
 class AssessmentWorkflow:
@@ -54,6 +69,11 @@ class AssessmentWorkflow:
         self.records: dict[str, Assessment] = {}
         self.tasks: dict[str, asyncio.Task] = {}
         self.legacy_active = lambda: 0
+        self.access = AccessControl()
+        self.academic = AcademicReviewServices(
+            InstitutionalRegistry.load(settings.config_dir / "institutions" / "dhbw" / "mosbach"),
+            cache=load_cache(settings.public_metadata_dir),
+        )
 
     def cleanup(self):
         for key, record in list(self.records.items()):
@@ -63,8 +83,10 @@ class AssessmentWorkflow:
                 if task is None or task.done():
                     self.records.pop(key)
                     self.tasks.pop(key, None)
+                    self.access.remove(key)
 
     def get(self, assessment_id: str) -> Assessment:
+        self.access.require(assessment_id)
         self.cleanup()
         if assessment_id not in self.records:
             raise LLMError(404, "Begutachtung nicht gefunden oder bereits bereinigt.")
@@ -85,18 +107,33 @@ class AssessmentWorkflow:
             profile = self.profiles.get(request.profile_id, request.work_type)
         except ValueError:
             raise LLMError(422, "Bewertungsprofil passt nicht zum Arbeitstyp.") from None
+        if profile.data_classification != "PUBLIC":
+            raise LLMError(403, "Private Bewertungskataloge sind in DEVELOPMENT gesperrt.")
+        if request.cohort and not request.cohort.startswith(
+            "DS" if request.program == "data_science_ai" else "WI"
+        ):
+            raise LLMError(422, "Jahrgang passt nicht zum Studiengang.")
         # An example may only be used with server-owned synthetic data.
+        assessment_id = str(uuid4())
         record = Assessment(
-            id=str(uuid4()),
+            id=assessment_id,
             profile=profile,
+            program=request.program,
+            cohort=request.cohort,
+            institutional_rules=self.academic.rules(
+                request.program, request.cohort, request.work_type
+            ),
+            classification=combine("PUBLIC", profile.data_classification),
             budget=CallBudget(self.config.limits.max_model_calls, self.config.limits.max_tokens),
             document=Document(
                 document_id="synthetic-demo",
-                classification="SYNTHETIC",
+                analysis_id=assessment_id,
+                classification="PUBLIC",
                 pages=dict(SYNTHETIC_PAGES),
                 complete=True,
             ),
         )
+        self.access.create(record.id)
         self.records[record.id] = record
         self.event(record, "PROFILE_SELECTED")
         return self.status(record.id)
@@ -133,7 +170,54 @@ class AssessmentWorkflow:
             "deployment_mode": self.settings.deployment_mode,
             "public_research": False,
             "ai_scoring": False,
+            "classification": record.classification,
+            "document_classification": record.document.classification,
+            "sperrvermerk_detected": record.document.sperrvermerk.detected,
+            "program": record.program,
+            "cohort": record.cohort,
+            "institutional_rules": record.institutional_rules,
+            "security": {
+                "mode": self.settings.security_mode.value,
+                "inference": "IN_PROCESS_MOCK_ONLY",
+                "endpoint": "in-process://demo",
+                "authorized_demo_models": [m.id for m in self.config.models.enabled()],
+                "external_research": "DISABLED",
+                "local_research": "PUBLIC_SNAPSHOTS_ONLY",
+                "real_documents_allowed": False,
+            },
         }
+
+    def academic_checks(self, assessment_id: str) -> dict:
+        record = self.released(assessment_id)
+        result = self.academic.check(record.document, record.institutional_rules)
+        # Combining with human review metadata raises classification; no model call follows.
+        result["classification"] = record.classification
+        result["decisions"] = list(record.academic_decisions)
+        for check in result["formal"]["checks"]:
+            check["finding_id"] = "formal:" + check["criterion_id"]
+        for row in result["citations"]["references"]:
+            row["finding_id"] = "citation:" + row["entry"]["id"]
+        return result
+
+    def academic_decide(self, assessment_id: str, decision: AcademicDecision) -> dict:
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        checks = self.academic_checks(assessment_id)
+        ids = {r["finding_id"] for r in checks["formal"]["checks"]}
+        ids.update(r["finding_id"] for r in checks["citations"]["references"])
+        if decision.finding_id not in ids:
+            raise LLMError(422, "Unbekannter lokaler Prüfbefund.")
+        if len(record.academic_decisions) >= 100:
+            raise LLMError(429, "Versionslimit erreicht.")
+        entry = {
+            **decision.model_dump(),
+            "revision": len(record.academic_decisions) + 1,
+            "at": now().isoformat(),
+        }
+        record.academic_decisions.append(entry)
+        self.event(record, "HUMAN_ACADEMIC_DECISION")
+        return entry
 
     @staticmethod
     def writable(record: Assessment):
@@ -141,6 +225,7 @@ class AssessmentWorkflow:
             raise LLMError(409, "Aktion im aktuellen Bewertungszustand nicht möglich.")
 
     def submit_human(self, assessment_id: str, submission: HumanReviewSubmission) -> dict:
+        self.access.require(assessment_id, "review")
         record = self.get(assessment_id)
         self.writable(record)
         if record.human:
@@ -150,10 +235,12 @@ class AssessmentWorkflow:
         if len(actual) != len(set(actual)) or set(actual) != expected:
             raise LLMError(422, "Jedes Kriterium muss genau einmal bearbeitet werden.")
         record.human = submission.model_copy(deep=True)
+        record.classification = combine(record.classification, Classification.RESTRICTED)
         self.event(record, "HUMAN_RELEASED")
         return self.status(assessment_id)
 
     def start_ai(self, assessment_id: str) -> dict:
+        self.access.require(assessment_id, "process")
         record = self.get(assessment_id)
         self.writable(record)
         if record.ai_state != "PENDING":
@@ -176,8 +263,7 @@ class AssessmentWorkflow:
                     record.profile.model_copy(deep=True),
                     record.budget,
                 )
-            expected = {c.id for c in record.profile.criteria}
-            if len(result) != len(expected) or {f.criterion_id for f in result} != expected:
+            if not check_coverage(record.profile, result).complete:
                 raise ValueError("Incomplete criterion coverage")
             record.ai, record.ai_state = result, "COMPLETED"
             self.event(record, "AI_COMPLETED")
@@ -191,6 +277,7 @@ class AssessmentWorkflow:
             self.event(record, "AI_FAILED")
 
     def release_ai(self, assessment_id: str) -> dict:
+        self.access.require(assessment_id, "review")
         record = self.get(assessment_id)
         self.writable(record)
         if not record.human or record.ai_state != "COMPLETED" or record.ai_released:
@@ -215,18 +302,75 @@ class AssessmentWorkflow:
                     "criterion_id": c.id,
                     "status": compare(human[c.id], ai[c.id]),
                     "human": human[c.id].model_dump(),
-                    "ai": ai[c.id].model_dump(),
+                    "ai": self.finding_view(record, ai[c.id]),
                 }
                 for c in record.profile.criteria
             ],
             "security_signals": detect_injection("\n".join(record.document.pages.values())),
             "routine_checks": inventory(record.document),
+            "source_checks": verify_local_sources(record.document, []),
             "decisions": list(record.decisions),
             "discussion": list(record.discussion),
             "audit": list(record.audit),
+            "classification": record.classification,
+            "coverage": check_coverage(record.profile, record.ai).__dict__,
+        }
+
+    @staticmethod
+    def finding_view(record: Assessment, finding: AssessmentFinding) -> dict:
+        decisions = [d for d in record.decisions if d["criterion_id"] == finding.criterion_id]
+        status = "PENDING"
+        if decisions:
+            decision = decisions[-1]
+            approved = set(decision.get("include_finding_ids", []))
+            if decision["include_ai_finding"]:
+                primary = next(f for f in record.ai if f.criterion_id == finding.criterion_id)
+                approved.add(primary.finding_id)
+            status = "ACCEPTED" if finding.finding_id in approved else "REJECTED"
+        return {
+            **finding.model_dump(exclude={"supplemental"}),
+            "human_approval": status,
+            "supplemental": [
+                AssessmentWorkflow.finding_view(record, f) for f in finding.supplemental
+            ],
+        }
+
+    def evidence(self, assessment_id: str, finding_id: str) -> dict:
+        record = self.released(assessment_id)
+        findings = [v for f in record.ai for v in [f, *f.supplemental]]
+        finding = next((f for f in findings if f.finding_id == finding_id), None)
+        if finding is None or finding.assessment_id != assessment_id:
+            raise LLMError(404, "Befund nicht gefunden.")
+        structure = structure_document(record.document)
+        block = structure.locate(finding.page, finding.quote)
+        page_text = record.document.pages.get(finding.page or 0, "")
+        matched = bool(
+            finding.evidence_status == "QUOTE_MATCHED"
+            and finding.quote.strip()
+            and finding.quote in page_text
+        )
+        start = page_text.index(finding.quote) if matched else None
+        end = start + len(finding.quote) if matched else None
+        return {
+            "finding": self.finding_view(record, finding),
+            "matched": matched,
+            "page": finding.page if matched else None,
+            "chapter": block.chapter if matched and block else None,
+            "block_id": block.id if matched and block else None,
+            "original_text": block.text
+            if matched and block
+            else page_text[max(0, start - 200) : end + 200]
+            if matched
+            else None,
+            "quote": finding.quote if matched else None,
+            "source_start": start,
+            "source_end": end,
+            "extraction_warnings": structure.warnings,
+            "classification": record.classification,
         }
 
     async def discuss(self, assessment_id: str, request: DiscussionRequest) -> dict:
+        self.access.require(assessment_id, "process")
         record = self.released(assessment_id)
         self.writable(record)
         criterion = self.criterion(record, request.criterion_id)
@@ -243,7 +387,7 @@ class AssessmentWorkflow:
                 _, output = await self.gateway.complete(
                     self.config.agents.synthesis_model,
                     "synthesis",
-                    "SYNTHETIC",
+                    combine(record.classification, Classification.RESTRICTED),
                     [
                         {
                             "role": "system",
@@ -271,6 +415,11 @@ class AssessmentWorkflow:
                     record.budget,
                     output_type=DiscussionOutput,
                     max_tokens=768,
+                    label=InformationLabel(
+                        Classification.RESTRICTED,
+                        record.id,
+                        frozenset({record.document.document_id}),
+                    ),
                 )
             entry = {**request.model_dump(), "answer": output.answer, "at": now().isoformat()}
             record.discussion.append(entry)
@@ -286,7 +435,26 @@ class AssessmentWorkflow:
             raise LLMError(422, "Unbekanntes Bewertungskriterium.")
         return criterion
 
+    def acknowledge_manual_review(self, assessment_id: str) -> dict:
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        if not record.discussion:
+            record.discussion.append(
+                {
+                    "criterion_id": "manual",
+                    "question": "",
+                    "answer": "Menschliche Prüfung ohne Modellaufruf ausdrücklich bestätigt.",
+                    "classification": Classification.RESTRICTED,
+                    "at": now().isoformat(),
+                    "processing": "HUMAN_ONLY",
+                }
+            )
+            self.event(record, "MANUAL_REVIEW_CONFIRMED")
+        return self.status(assessment_id)
+
     def decide(self, assessment_id: str, decision: CriterionDecision) -> dict:
+        self.access.require(assessment_id, "review")
         record = self.released(assessment_id)
         self.writable(record)
         self.criterion(record, decision.criterion_id)
@@ -294,6 +462,10 @@ class AssessmentWorkflow:
             raise LLMError(409, "Zunächst die Bewertungen diskutieren.")
         if len(record.decisions) >= 60:
             raise LLMError(429, "Versionslimit erreicht.")
+        primary = next(f for f in record.ai if f.criterion_id == decision.criterion_id)
+        available = {f.finding_id for f in [primary, *primary.supplemental]}
+        if not set(decision.include_finding_ids) <= available:
+            raise LLMError(422, "Freigabe enthält fremde oder unbekannte Befunde.")
         entry = {
             **decision.model_dump(),
             "revision": len(record.decisions) + 1,
@@ -320,17 +492,36 @@ class AssessmentWorkflow:
         for c in record.profile.criteria:
             decision, finding = decisions[c.id], findings[c.id]
             text = f"{c.id}: {decision['conclusion']}\nBegründung: {decision['rationale']}"
+            selected = set(decision.get("include_finding_ids", []))
             if decision["include_ai_finding"]:
-                text += (
-                    f"\nFreigegebener KI-Befund: {finding.description}"
-                    f"\nBeleg (Seite {finding.page}): {finding.quote}"
-                    f"\nEvidenz: {finding.evidence_status}; Unsicherheit: {finding.uncertainty}"
-                )
+                selected.add(finding.finding_id)
+            for value in [finding, *finding.supplemental]:
+                if value.finding_id in selected:
+                    text += (
+                        f"\nFreigegebener KI-Befund: {value.description}"
+                        f"\nBeleg (Seite {value.page}; Kapitel {value.chapter}): {value.quote}"
+                        f"\nEvidenz: {value.evidence_status}; Unsicherheit: {value.uncertainty}"
+                        f"\nGegenprüfung: {value.verification_status}; Konflikt: {value.conflict}"
+                    )
             parts.append(text)
         label = "Menschlich freigegeben" if record.terminal == "FINALIZED" else "Gutachtenentwurf"
-        return {"label": label, "text": label + "\n\n" + "\n\n".join(parts)}
+        academic = {d["finding_id"]: d for d in record.academic_decisions}
+        for decision in academic.values():
+            if decision["decision"] == "ACCEPTED":
+                parts.append(
+                    "Menschlicher Hinweis zur lokalen Prüfung "
+                    + decision["finding_id"]
+                    + ": "
+                    + decision["rationale"]
+                )
+        return {
+            "label": label,
+            "text": label + "\n\n" + "\n\n".join(parts),
+            "classification": record.classification,
+        }
 
     def finalize(self, assessment_id: str) -> dict:
+        self.access.require(assessment_id, "review")
         record = self.released(assessment_id)
         self.writable(record)
         self.draft(assessment_id)
@@ -339,6 +530,7 @@ class AssessmentWorkflow:
         return self.draft(assessment_id)
 
     async def cancel(self, assessment_id: str) -> dict:
+        self.access.require(assessment_id, "process")
         record = self.get(assessment_id)
         self.writable(record)
         task = self.tasks.get(assessment_id)
@@ -359,3 +551,18 @@ class AssessmentWorkflow:
                 await task
         self.records.clear()
         self.tasks.clear()
+        self.access.assignments.clear()
+
+    async def delete(self, assessment_id: str) -> None:
+        self.access.require(assessment_id, "delete")
+        record = self.get(assessment_id)
+        if record.busy:
+            raise LLMError(409, "Verarbeitung zunächst beenden.")
+        task = self.tasks.get(assessment_id)
+        if task and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        self.records.pop(assessment_id, None)
+        self.tasks.pop(assessment_id, None)
+        self.access.remove(assessment_id)

@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.llm.model_registry import Role
+from app.security.classification import Classification
 
 
 def now() -> datetime:
@@ -70,6 +71,12 @@ class AgentRecord(BaseModel):
     error: str | None = None
     result_status: str | None = None
     specification: AgentSpec | None = None
+    data_classification: Classification = Classification.RESTRICTED
+    allowed_models: frozenset[str] = frozenset()
+    allowed_tools: frozenset[str] = frozenset({"document.read"})
+    allowed_documents: frozenset[str] = frozenset()
+    allowed_network_targets: frozenset[str] = frozenset()
+    security_mode: Literal["DEVELOPMENT"] = "DEVELOPMENT"
 
 
 class AgentProposals(StrictModel):
@@ -115,6 +122,7 @@ class ModelReview(ReviewOutput):
 
 
 class Finding(FindingDraft):
+    data_classification: Classification = Classification.RESTRICTED
     finding_id: str = Field(default_factory=lambda: str(uuid4()))
     run_id: str
     agent_id: str
@@ -164,7 +172,7 @@ class RunRecord(BaseModel):
         "QUEUED", "RUNNING", "WAITING_FOR_REVIEW", "COMPLETED", "FAILED", "CANCELLED"
     ] = "QUEUED"
     privacy_mode: str = "LOCAL_ONLY"
-    data_classification: str = "SYNTHETIC"
+    data_classification: Classification = Classification.RESTRICTED
     mocked: bool = False
     stage: str = "queued"
     progress: float = 0

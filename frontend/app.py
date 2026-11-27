@@ -20,6 +20,11 @@ st.markdown(
 )
 st.title("ThesisHounds")
 st.caption("Lokale KI · Nachvollziehbare Begutachtung · Menschliche Entscheidung")
+st.warning(
+    "DEVELOPMENT · ausschließlich synthetische Daten. Echte Arbeiten sind gesperrt. "
+    "Standard: RESTRICTED. Externe KI und öffentliche Recherche sind deaktiviert. "
+    "Hochschulauthentifizierung und Netzwerkabnahme stehen aus."
+)
 st.write(
     "Infrastruktur für die vertrauliche Analyse wissenschaftlicher Arbeiten. "
     "Dieses Dashboard prüft die Systemverbindung und ermöglicht einfache Modelltests."
@@ -69,9 +74,11 @@ with st.expander("Lokal verfügbare Modelle", expanded=True):
         st.info("Keine lokalen Modelle abrufbar. Bitte die Modellbereitstellung prüfen.")
 
 st.subheader("LLM-Verbindung testen")
-st.caption("Nur freigegebene Testtexte verwenden. Antworten müssen fachlich geprüft werden.")
+st.caption(
+    "Festes synthetisches Testsignal. Freie Texte sind bis zur Produktionsfreigabe gesperrt."
+)
 with st.form("llm_test"):
-    prompt = st.text_area("Testanfrage", max_chars=16000, height=140)
+    prompt = st.text_area("Testanfrage", value="Test", disabled=True, height=140)
     submitted = st.form_submit_button(
         "Anfrage senden", disabled=not status.get("model_available", False), type="primary"
     )
@@ -81,7 +88,7 @@ if submitted:
     else:
         with st.spinner("Das lokale Modell antwortet …"):
             try:
-                result = request_backend("POST", "/api/v1/chat", json={"prompt": prompt})
+                result = request_backend("POST", "/api/v1/chat", json={"prompt": "Test"})
                 st.subheader("Modellantwort")
                 # Render model output as text; never execute or interpret HTML from a model.
                 st.text(result["answer"])

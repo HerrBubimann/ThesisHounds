@@ -24,7 +24,7 @@ print('OK: Frontend-Netz -> Backend -> Ollama; konfiguriertes Modell vorhanden.'
 CHAT_CHECK = """
 request = urllib.request.Request(
     'http://backend:8000/api/v1/chat',
-    data=json.dumps({'prompt': 'Antworte kurz mit: ThesisHounds ist bereit.'}).encode(),
+    data=json.dumps({'prompt': 'Test'}).encode(),
     headers={'Content-Type': 'application/json'},
     method='POST',
 )

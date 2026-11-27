@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 
 from app.assessments.schemas import (
+    AcademicDecision,
     AssessmentRequest,
     CriterionDecision,
     DiscussionRequest,
@@ -26,7 +27,11 @@ Dependency = Annotated[AssessmentWorkflow, Depends(get_assessments)]
 
 @router.get("/profiles")
 async def profiles(service: Dependency):
-    return [p.model_dump() for p in service.profiles.profiles.values()]
+    return [
+        p.model_dump()
+        for p in service.profiles.profiles.values()
+        if p.data_classification == "PUBLIC" and p.status != "CANDIDATE"
+    ]
 
 
 @router.post("", status_code=201)
@@ -43,6 +48,16 @@ async def status(assessment_id: UUID, service: Dependency):
 async def document(assessment_id: UUID, service: Dependency):
     # Only the fixed synthetic fixture can be created by the assessment API.
     return service.get(str(assessment_id)).document.model_dump()
+
+
+@router.get("/{assessment_id}/academic-checks")
+async def academic_checks(assessment_id: UUID, service: Dependency):
+    return service.academic_checks(str(assessment_id))
+
+
+@router.post("/{assessment_id}/academic-decisions")
+async def academic_decide(assessment_id: UUID, payload: AcademicDecision, service: Dependency):
+    return service.academic_decide(str(assessment_id), payload)
 
 
 @router.post("/{assessment_id}/human-review")
@@ -70,9 +85,19 @@ async def discussion(assessment_id: UUID, payload: DiscussionRequest, service: D
     return await service.discuss(str(assessment_id), payload)
 
 
+@router.get("/{assessment_id}/findings/{finding_id}/evidence")
+async def evidence(assessment_id: UUID, finding_id: UUID, service: Dependency):
+    return service.evidence(str(assessment_id), str(finding_id))
+
+
 @router.post("/{assessment_id}/decisions")
 async def decide(assessment_id: UUID, payload: CriterionDecision, service: Dependency):
     return service.decide(str(assessment_id), payload)
+
+
+@router.post("/{assessment_id}/manual-review")
+async def manual_review(assessment_id: UUID, payload: ExplicitRelease, service: Dependency):
+    return service.acknowledge_manual_review(str(assessment_id))
 
 
 @router.get("/{assessment_id}/draft")
@@ -88,3 +113,8 @@ async def finalize(assessment_id: UUID, payload: ExplicitRelease, service: Depen
 @router.post("/{assessment_id}/cancel")
 async def cancel(assessment_id: UUID, service: Dependency):
     return await service.cancel(str(assessment_id))
+
+
+@router.delete("/{assessment_id}", status_code=204)
+async def delete(assessment_id: UUID, service: Dependency) -> None:
+    await service.delete(str(assessment_id))

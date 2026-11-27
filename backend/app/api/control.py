@@ -29,7 +29,7 @@ async def agents(runtime: RuntimeDependency) -> dict:
         runtime.agents.refresh(record)
     return {
         "definitions": runtime.config.agents.model_dump(),
-        "agents": list(runtime.agents.records.values()),
+        "agents": [a for a in runtime.agents.records.values() if runtime.access.allows(a.run_id)],
     }
 
 
@@ -39,6 +39,7 @@ async def agent(agent_id: str, runtime: RuntimeDependency) -> AgentRecord:
     record = runtime.agents.records.get(agent_id)
     if record is None:
         raise LLMError(404, "Agent wurde nicht gefunden.")
+    runtime.access.require(record.run_id)
     runtime.agents.refresh(record)
     return record
 
@@ -46,7 +47,7 @@ async def agent(agent_id: str, runtime: RuntimeDependency) -> AgentRecord:
 @router.get("/runs", response_model=list[RunRecord])
 async def runs(runtime: RuntimeDependency) -> list[RunRecord]:
     runtime.cleanup()
-    return [runtime.get(key) for key in list(runtime.runs)]
+    return [runtime.get(key) for key in list(runtime.runs) if runtime.access.allows(key)]
 
 
 @router.post("/runs", response_model=RunRecord, status_code=202)
@@ -62,6 +63,11 @@ async def run(run_id: UUID, runtime: RuntimeDependency) -> RunRecord:
 @router.post("/runs/{run_id}/cancel", response_model=RunRecord)
 async def cancel(run_id: UUID, runtime: RuntimeDependency) -> RunRecord:
     return await runtime.cancel(str(run_id))
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+async def delete(run_id: UUID, runtime: RuntimeDependency) -> None:
+    await runtime.delete(str(run_id))
 
 
 @router.get("/runs/{run_id}/graph")

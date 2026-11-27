@@ -1,5 +1,11 @@
 # Datenschutz und Sicherheitsgrenzen
 
+Aktueller Stand 2026-11-26: [verbindliche Privacy-Architektur](security/privacy_architecture.md)
+und [Production Gate](security/production_readiness.md). Standard ausschließlich
+In-Process-Mock, echte Inhalte und KI-Diskussion gesperrt, Hochschulstack absichtlich
+nicht startfähig. Die nachfolgenden ursprünglichen Foundation-Hinweise begründen
+keine weitergehende Freigabe. Aktuelle Nachweise: [Testergebnisse](security/privacy_test_results.md).
+
 ## Vertrauensbasis und Betriebsmodus
 
 Die Foundation ist für lokalen Entwicklungsbetrieb mit freigegebenen synthetischen Daten vorgesehen. Vertrauliche Arbeiten können personenbezogene Daten, unveröffentlichte Forschung und Geschäftsgeheimnisse enthalten. Solche Dokumente können über die aktuelle Run-API nicht eingereicht werden; sie akzeptiert ausschließlich die serverseitige synthetische Fixture.

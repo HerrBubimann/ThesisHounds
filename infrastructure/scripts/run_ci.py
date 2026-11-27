@@ -116,7 +116,12 @@ def coverage() -> None:
 def security() -> None:
     out = REPORTS / "security"
     out.mkdir(parents=True, exist_ok=True)
-    targets = ["backend/app", "frontend", "infrastructure/scripts"]
+    targets = [
+        "backend/app",
+        "frontend",
+        "infrastructure/scripts",
+        "infrastructure/security/scripts",
+    ]
     bandit = scanner("bandit")
     subprocess.run(
         [bandit, "-c", "pyproject.toml", "-r", *targets, "-q", "-f", "json",

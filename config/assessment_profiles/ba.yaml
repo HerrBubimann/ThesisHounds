@@ -3,6 +3,7 @@ id: ba-example
 work_type: BA
 version: "0.1"
 status: EXAMPLE
+data_classification: PUBLIC
 source: "ThesisHounds synthetic MVP example, 2026-11-26"
 subject_notes: "Exploratives Beispiel für BA; wissenschaftlicher Anspruch noch abzustimmen."
 criteria:

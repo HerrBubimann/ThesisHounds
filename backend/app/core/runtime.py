@@ -11,6 +11,10 @@ from app.llm.gateway import CallBudget, LLMGateway
 from app.llm.providers.base import LLMProvider
 from app.monitoring.resources import sample_resources
 from app.schemas.domain import AgentStatus, Finding, HumanReview, RunRecord, RunRequest, now
+from app.security.access_control import AccessControl
+from app.security.audit_service import AuditEvent, AuditService
+from app.security.classification import Classification, combine
+from app.security.retention_service import purge_orphan_documents
 from app.services.document_store import DocumentStore
 from app.workflows.assessment_workflow import AssessmentWorkflow
 
@@ -30,11 +34,16 @@ class AnalysisRuntime:
                 limits.max_parallel_model_calls, settings.max_concurrent_model_requests
             ),
             sequential_loading=limits.sequential_model_loading,
+            capability_records=self.config.capabilities,
         )
         self.agents = AgentRegistry(limits)
         self.engine = ExecutionEngine(self.gateway, self.agents, limits)
         self.orchestrator = MasterOrchestrator(self.config, self.gateway, self.agents, self.engine)
         self.store = DocumentStore(settings.document_store_dir)
+        purge_orphan_documents(settings.document_store_dir, limits.retention_seconds)
+        self.access = AccessControl()
+        self.audit = AuditService(settings.document_store_dir.parent / "audit.jsonl")
+        self.gateway.audit = self.audit
         self.runs: dict[str, RunRecord] = {}
         self.findings: dict[str, list[Finding]] = {}
         self.tasks: dict[str, asyncio.Task] = {}
@@ -68,8 +77,12 @@ class AnalysisRuntime:
                 self.tasks.pop(run.run_id, None)
                 self.budgets.pop(run.run_id, None)
                 self.agents.remove_run(run.run_id)
+                self.access.remove(run.run_id)
 
     def start(self, request: RunRequest) -> RunRecord:
+        defaults = RunRequest()
+        if request.task != defaults.task or request.criteria != defaults.criteria:
+            raise LLMError(403, "Freie Aufgaben und Kriterien sind im Entwicklungsmodus gesperrt.")
         self.cleanup(make_room=True)
         if (
             sum(not task.done() for task in self.tasks.values())
@@ -87,7 +100,14 @@ class AnalysisRuntime:
             criteria=request.criteria,
             mocked=self.mocked,
         )
-        document = self.store.create_demo(run.run_id)
+        self.access.create(run.run_id)
+        try:
+            self.audit.record(AuditEvent(analysis_id=run.run_id, action="CREATE", decision="ALLOW"))
+            document = self.store.create_demo(run.run_id)
+        except Exception:
+            self.access.remove(run.run_id)
+            raise
+        run.data_classification = document.classification
         run.document_digest = document.digest
         run.model_snapshot = [m.model_dump() for m in self.config.models.enabled()]
         run.execution_snapshot = self.config.limits.model_dump()
@@ -163,6 +183,7 @@ class AnalysisRuntime:
             await asyncio.sleep(2)
 
     def get(self, run_id: str) -> RunRecord:
+        self.access.require(run_id)
         self.cleanup()
         if run_id not in self.runs:
             raise LLMError(404, "Analyse wurde nicht gefunden oder bereits bereinigt.")
@@ -179,7 +200,12 @@ class AnalysisRuntime:
         return run
 
     async def cancel(self, run_id: str) -> RunRecord:
+        self.access.require(run_id, "process")
         run = self.get(run_id)
+        return await self._cancel(run)
+
+    async def _cancel(self, run: RunRecord) -> RunRecord:
+        run_id = run.run_id
         task = self.tasks[run_id]
         if not task.done():
             task.cancel()
@@ -199,11 +225,18 @@ class AnalysisRuntime:
         for run_id in list(self.tasks):
             if not self.tasks[run_id].done():
                 with suppress(asyncio.CancelledError):
-                    await self.cancel(run_id)
+                    await self._cancel(self.runs[run_id])
         for run_id in self.runs:
             self.store.remove(run_id)
+        self.runs.clear()
+        self.findings.clear()
+        self.tasks.clear()
+        self.budgets.clear()
+        self.agents.records.clear()
+        self.access.assignments.clear()
 
     def human_review(self, run_id: str, finding_id: str, review: HumanReview) -> Finding:
+        self.access.require(run_id, "review")
         run = self.get(run_id)
         values = self.findings.get(run_id, [])
         finding = next(
@@ -225,6 +258,10 @@ class AnalysisRuntime:
                 "vorherige Modellprüfung ist ungültig."
             )
         finding.human_status, finding.human_note = review.decision, review.note
+        finding.data_classification = combine(
+            finding.data_classification, Classification.RESTRICTED
+        )
+        run.data_classification = combine(run.data_classification, finding.data_classification)
         if all(f.human_status != "PENDING" for f in values):
             accepted = [f for f in values if f.human_status == "ACCEPTED"]
             # The LLM synthesis is NEVER included in a final report: it is not human-approved.
@@ -238,6 +275,18 @@ class AnalysisRuntime:
             run.status, run.final_report = "WAITING_FOR_REVIEW", None
         run.validated_count = sum(f.evidence_status == "VALIDATED" for f in values)
         return finding
+
+    async def delete(self, run_id: str) -> None:
+        self.access.require(run_id, "delete")
+        await self._cancel(self.get(run_id))
+        self.audit.record(AuditEvent(analysis_id=run_id, action="DELETE", decision="ALLOW"))
+        self.store.remove(run_id)
+        self.runs.pop(run_id, None)
+        self.findings.pop(run_id, None)
+        self.tasks.pop(run_id, None)
+        self.budgets.pop(run_id, None)
+        self.agents.remove_run(run_id)
+        self.access.remove(run_id)
 
     async def model_status(self) -> list[dict]:
         try:

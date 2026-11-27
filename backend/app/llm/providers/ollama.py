@@ -1,3 +1,5 @@
+import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -8,6 +10,9 @@ from app.llm.errors import LLMError
 from app.llm.model_registry import ModelDefinition
 from app.llm.providers.base import Completion
 from app.models.schemas import LocalModel, ModelsResponse
+from app.security.egress_policy import approved_target, inference_dispatch
+
+MAX_PROVIDER_RESPONSE_BYTES = 8_000_000
 
 
 class OllamaProvider:
@@ -16,22 +21,43 @@ class OllamaProvider:
         self.client = client
 
     async def request(self, method: str, path: str, *, chat: bool = False, **kwargs: Any) -> dict:
+        target = self.client.base_url.join(path)
+        approved_target(target)
+        if path == "/api/chat" and (
+            not inference_dispatch.get()
+            or kwargs.get("json", {}).get("model") != inference_dispatch.get()
+        ):
+            raise LLMError(403, "INFERENCE_GATEWAY_REQUIRED")
+        if str(self.client.base_url).rstrip("/") != str(self.settings.ollama_base_url).rstrip("/"):
+            raise LLMError(403, "INFERENCE_ENDPOINT_MISMATCH")
         try:
-            response = await self.client.request(
-                method,
-                path,
-                timeout=httpx.Timeout(
-                    self.settings.llm_chat_timeout if chat else self.settings.llm_status_timeout,
-                    connect=self.settings.llm_connect_timeout,
-                ),
-                **kwargs,
-            )
-            response.raise_for_status()
-            data = response.json()
+            deadline = self.settings.llm_chat_timeout if chat else self.settings.llm_status_timeout
+            async with (
+                asyncio.timeout(deadline),
+                self.client.stream(
+                    method,
+                    path,
+                    follow_redirects=False,
+                    timeout=httpx.Timeout(
+                        self.settings.llm_chat_timeout
+                        if chat
+                        else self.settings.llm_status_timeout,
+                        connect=self.settings.llm_connect_timeout,
+                    ),
+                    **kwargs,
+                ) as response,
+            ):
+                response.raise_for_status()
+                content = bytearray()
+                async for chunk in response.aiter_bytes():
+                    if len(content) + len(chunk) > MAX_PROVIDER_RESPONSE_BYTES:
+                        raise LLMError(502, "LOCAL_PROVIDER_RESPONSE_TOO_LARGE")
+                    content.extend(chunk)
+                data = json.loads(content)
             if not isinstance(data, dict):
                 raise ValueError("Invalid object")
             return data
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, TimeoutError):
             raise LLMError(504, "Zeitlimit bei Ollama überschritten.") from None
         except httpx.HTTPStatusError as exc:
             if chat and exc.response.status_code == 404:
@@ -85,8 +111,16 @@ class OllamaProvider:
         *,
         unload: bool,
     ) -> Completion:
-        if not any(m.name == model.name for m in await self.discover()):
+        if inference_dispatch.get() != model.name:
+            raise LLMError(403, "INFERENCE_GATEWAY_REQUIRED")
+        matches = [m for m in await self.discover() if m.name == model.name]
+        if len(matches) != 1:
             raise LLMError(503, "Das angeforderte Modell ist lokal nicht verfügbar.")
+        if (
+            model.expected_digest
+            and matches[0].digest.removeprefix("sha256:") != model.expected_digest
+        ):
+            raise LLMError(403, "LOCAL_MODEL_DIGEST_MISMATCH")
         payload: dict[str, Any] = {
             "model": model.name,
             "messages": messages,

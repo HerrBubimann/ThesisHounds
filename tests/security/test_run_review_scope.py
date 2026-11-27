@@ -16,7 +16,7 @@ def test_review_endpoint_rejects_cross_run_and_unscoped_finding_ids(tmp_path):
         Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path / "documents")
     )
     with (
-        patch("app.main.OllamaProvider", return_value=WorkflowProvider()),
+        patch("app.main.create_provider", return_value=WorkflowProvider()),
         TestClient(application) as client,
     ):
         run_ids = []

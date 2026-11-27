@@ -4,7 +4,9 @@ primaryColor = "#dc2626"
 backgroundColor = "#0e0e10"
 secondaryBackgroundColor = "#1c1c20"
 textColor = "#fafafa"
-font = "sans serif"
+font = "Arial, sans-serif"
+headingFont = "Arial, sans-serif"
+codeFont = "monospace"
 
 [browser]
 gatherUsageStats = false
