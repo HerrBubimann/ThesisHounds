@@ -126,3 +126,57 @@ available, so no new container build/runtime-smoke or image-scan claim is made.
 Dependency locks were not changed. A local green test run is not a complete remote
 CI or institutional production acceptance. Technical tests establish deterministic
 boundaries; no human-participant bias-reduction result has been measured.
+
+## CI smoke-contract follow-up
+
+The container smoke payload in `infrastructure/scripts/ci_e2e.py` still omitted
+the newly required `profile_confirmed: true` on assessment creation. This caused
+HTTP 422 after the healthy-stack and legacy-workflow checks. The payload now
+explicitly confirms the selected synthetic example catalog; the API gate is unchanged.
+
+`tests/integration/test_ci_e2e_contract.py` executes the exact `FRONTEND_CHECK`
+source against the actual mock FastAPI application through an in-process HTTP
+adapter. It covers the entire payload through embargo checks, source/evidence
+inspection, decisions and finalization, without duplicating its request bodies.
+
+Follow-up verification: **51 tests passed** across smoke-contract, assessment API,
+CI scripts/workflow and privacy-gate tests; repository Ruff lint and formatting
+passed. Report: `reports/junit-smoke-contract.xml`. This is an API-contract
+regression check, not a new container-runtime result. Docker daemon availability
+was checked and remained false; no new full-suite coverage figure is claimed.
+
+## CI experiment-budget follow-up
+
+The offline privacy-security step reproduced `EXPERIMENT_INCOMPLETE` in the
+all-variations matrix: 48 of 50 cases completed; architecture A failed in the
+`injection` and `expected_grade` conditions with HTTP-style error code 422 before
+any model dispatch. Serialized messages, schema, framing and output reservation
+required 8205 conservative budget units against the unchanged 8192 context limit.
+The baseline used 8146 units and therefore did not expose the boundary in earlier
+baseline-only tests. This was an input-size failure, not an expected privacy denial.
+
+The single-batch request now uses compact JSON separators for its user-data envelope.
+All document text and catalog fields are preserved. Model limits, output reservation,
+conservative gateway accounting, safety gates and completeness requirements remain
+unchanged. No failed experiment is relabeled as successful or excluded from the matrix.
+
+Two regression cases in `tests/unit/test_evaluation_lab.py` execute both full CI
+matrices across A–E, assert complete mandatory coverage, verify existing model limits
+and call budgets, and prohibit external HTTP requests.
+
+Actual follow-up verification:
+
+- `app.evaluation.lab --all-variations --repeats 1`: 50/50 complete, 208 mock calls.
+- `app.evaluation.lab --all-ablations --repeats 1`: 20/20 complete, 76 mock calls.
+- Privacy ablation: protected variant passed; academic benchmark: 6 citation and
+  4 formal cases passed with zero external requests; injection benchmark: all
+  mandatory controls passed across 125 mock rows.
+- 64 targeted evaluation, context-budget, smoke-contract and CI-policy tests passed;
+  Ruff lint/formatting and artifact privacy passed. Report:
+  `reports/junit-ci-experiment-regression.xml`.
+
+All five benchmark commands from the failing CI step were reproduced locally.
+These are synthetic deterministic checks, not empirical model-quality or bias-study
+results. The quality gate correctly rejected the failed upstream jobs and was not
+modified. The preceding smoke-payload fix remains present; a new remote CI/container
+run and a new full-suite coverage measurement are not claimed by this follow-up.

@@ -351,6 +351,7 @@ class AISecondReviewer:
                                 "untrusted_pages": document.pages,
                             },
                             ensure_ascii=False,
+                            separators=(",", ":"),
                         ),
                     },
                 ],
