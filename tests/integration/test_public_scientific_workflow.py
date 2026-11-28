@@ -29,7 +29,8 @@ def test_assessment_pins_bibliographic_version_and_uses_same_citation_report(tmp
         TestClient(app) as client,
     ):
         key = client.post(
-            "/api/v1/assessments", json={"work_type": "PA1", "profile_id": "pa1-example"}
+            "/api/v1/assessments",
+            json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"},
         ).json()["id"]
         path = "/api/v1/assessments/" + key
         assert client.get(path + "/provenance").status_code == 409

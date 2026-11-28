@@ -1,5 +1,6 @@
 """Explicit projections prevent independent review contents leaking through status APIs."""
 
+import asyncio
 import hashlib
 from typing import Annotated, Literal
 from uuid import UUID
@@ -7,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.assessments.human_import import extract_review
 from app.assessments.schemas import (
     AcademicDecision,
     AssessmentRequest,
@@ -15,11 +17,13 @@ from app.assessments.schemas import (
     DocumentSecurityDecision,
     ExplicitRelease,
     FindingFeedback,
+    HumanReviewImport,
     HumanReviewSubmission,
     MethodConfirmation,
     ReviewerNote,
     ReviewerTimeAction,
 )
+from app.knowledge.importer import ImportRejected
 from app.llm.errors import LLMError
 from app.services.document_store import checked_pilot_root, load_pilot_document, pilot_documents
 from app.workflows.assessment_workflow import AssessmentWorkflow
@@ -147,6 +151,51 @@ async def academic_decide(assessment_id: UUID, payload: AcademicDecision, servic
 @router.post("/{assessment_id}/human-review")
 async def human_review(assessment_id: UUID, payload: HumanReviewSubmission, service: Dependency):
     return service.submit_human(str(assessment_id), payload)
+
+
+@router.get("/{assessment_id}/human-review")
+async def original_human_review(assessment_id: UUID, service: Dependency):
+    return service.human_review(str(assessment_id))
+
+
+@router.post("/{assessment_id}/human-review/start")
+async def begin_human_review(assessment_id: UUID, service: Dependency):
+    return service.begin_human(str(assessment_id))
+
+
+@router.post("/{assessment_id}/human-review/import-preview")
+async def import_human_review(assessment_id: UUID, payload: HumanReviewImport, service: Dependency):
+    service.access.require(str(assessment_id), "review")
+    record = service.get(str(assessment_id))
+    service.writable(record)
+    if record.human:
+        raise LLMError(409, "INITIAL_REVIEW_ALREADY_SUBMITTED")
+    binding = record.confirmed_binding
+    try:
+        preview = await asyncio.to_thread(
+            extract_review, payload, record.profile.model_copy(deep=True)
+        )
+    except ImportRejected:
+        raise LLMError(422, "LOCAL_REVIEW_IMPORT_REJECTED") from None
+    # Extraction yields control: recheck deletion, finalization and source binding.
+    if service.get(str(assessment_id)).confirmed_binding != binding:
+        raise LLMError(409, "REVIEW_DOCUMENT_OR_PROFILE_CHANGED")
+    return service.import_human(str(assessment_id), preview)
+
+
+@router.get("/{assessment_id}/decision-ledger")
+async def decision_ledger(assessment_id: UUID, service: Dependency):
+    return service.decision_history(str(assessment_id))
+
+
+@router.get("/{assessment_id}/human-review/import-preview")
+async def human_import_preview(assessment_id: UUID, service: Dependency):
+    return service.human_import_preview(str(assessment_id))
+
+
+@router.delete("/{assessment_id}/human-review/import-preview")
+async def discard_human_import(assessment_id: UUID, service: Dependency):
+    return service.discard_human_import(str(assessment_id))
 
 
 @router.post("/{assessment_id}/ai-review", status_code=202)

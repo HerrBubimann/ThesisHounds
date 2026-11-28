@@ -77,6 +77,7 @@ def test_local_checks_are_embargoed_scoped_and_human_confirmed(tmp_path):
     ):
         request = {
             "work_type": "PA1",
+            "profile_confirmed": True,
             "profile_id": "pa1-example",
             "cohort": "DS25",
             "program": "data_science_ai",
@@ -178,7 +179,8 @@ def test_delete_one_assessment_keeps_other_task_managed(tmp_path):
     ):
         ids = [
             client.post(
-                "/api/v1/assessments", json={"work_type": "PA1", "profile_id": "pa1-example"}
+                "/api/v1/assessments",
+                json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"},
             ).json()["id"]
             for _ in range(2)
         ]

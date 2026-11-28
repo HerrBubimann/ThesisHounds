@@ -142,14 +142,19 @@ def test_elapsed_review_sessions_are_explicit_and_close_on_human_finalization(tm
 
 
 def test_exact_selected_duplicates_are_printed_once_with_both_original_ids(tmp_path):
-    with assessment(tmp_path) as (app, client, path, key, _):
-        primary = app.state.runtime.assessments.records[key].ai[0]
+    def duplicate_first(findings):
+        primary = findings[0]
         primary.conflict = False
         duplicate = primary.model_copy(
             deep=True,
             update={"finding_id": str(uuid4()), "model_id": "mistral", "supplemental": []},
         )
         primary.supplemental.append(duplicate)
+
+    # Inject synthetic model output before the immutable independent snapshot is made.
+    with assessment(tmp_path, ai_transform=duplicate_first) as (app, client, path, key, _):
+        primary = app.state.runtime.assessments.records[key].ai[0]
+        duplicate = primary.supplemental[0]
         workspace = client.get(path + "/comparison").json()["reviewer_workspace"]
         assert workspace["finding_groups"]["redundancy_candidates"] == 1
         decide_all(client, path, primary=primary.criterion_id, duplicate=duplicate.finding_id)

@@ -126,11 +126,15 @@ def test_lifecycle_limits_cleanup_and_benchmark(tmp_path):
         provider = AssessmentProvider()
         app.gateway.providers["ollama"] = provider
         flow = app.assessments
-        record = flow.create(AssessmentRequest(work_type="BA", profile_id="ba-example"))
+        record = flow.create(
+            AssessmentRequest(work_type="BA", profile_confirmed=True, profile_id="ba-example")
+        )
         key = record["id"]
         flow.submit_human(key, HumanReviewSubmission.model_validate(human_submission()))
         flow.start_ai(key)
-        second = flow.create(AssessmentRequest(work_type="PA2", profile_id="pa2-example"))
+        second = flow.create(
+            AssessmentRequest(work_type="PA2", profile_confirmed=True, profile_id="pa2-example")
+        )
         with pytest.raises(LLMError, match="aktiver"):
             flow.start_ai(second["id"])
         await flow.tasks[key]

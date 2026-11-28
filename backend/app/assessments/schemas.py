@@ -2,12 +2,14 @@ from typing import Literal
 from uuid import uuid4
 
 from app.schemas.domain import CompactSchemaModel, StrictModel
-from pydantic import Field
+from pydantic import ConfigDict, Field, model_validator
 
 Judgment = Literal["POSITIVE", "MIXED", "NEGATIVE", "NOT_ASSESSABLE"]
 
 
 class AssessmentRequest(StrictModel):
+    profile_confirmed: Literal[True]
+    mode: Literal["AI_ASSISTED", "MANUAL_ONLY"] = "AI_ASSISTED"
     work_type: Literal["PA1", "PA2", "BA"]
     profile_id: str = Field(min_length=1, max_length=40)
     document_id: str = Field(
@@ -17,13 +19,17 @@ class AssessmentRequest(StrictModel):
     cohort: str | None = Field(default=None, pattern=r"^(DS|WI)[0-9]{2}$")
 
 
-class AcademicDecision(StrictModel):
+class HumanInput(StrictModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class AcademicDecision(HumanInput):
     finding_id: str = Field(min_length=1, max_length=100)
     decision: Literal["ACCEPTED", "REJECTED"]
     rationale: str = Field(min_length=1, max_length=1000)
 
 
-class CriterionReview(StrictModel):
+class CriterionReview(HumanInput):
     criterion_id: str = Field(min_length=1, max_length=40)
     judgment: Judgment
     observations: str = Field(min_length=1, max_length=1000)
@@ -31,15 +37,36 @@ class CriterionReview(StrictModel):
     weaknesses: str = Field(default="", max_length=600)
     rationale: str = Field(min_length=1, max_length=1000)
     open_questions: str = Field(default="", max_length=600)
+    references: str = Field(default="", max_length=600)
+    assessability: Literal["APPLICABLE", "NOT_APPLICABLE", "INSUFFICIENT_INFORMATION"] = (
+        "APPLICABLE"
+    )
 
 
 class HumanReviewSubmission(StrictModel):
     criteria: list[CriterionReview] = Field(min_length=1, max_length=6)
     release: Literal[True]
+    import_id: str | None = Field(default=None, max_length=100)
+    import_confirmed: Literal[True] | None = None
+
+
+class HumanReviewImport(StrictModel):
+    format: Literal["json", "pdf", "docx", "yaml"]
+    content_base64: str = Field(min_length=1, max_length=900_000)
+    synthetic_or_authorized_public_test_data: Literal[True]
 
 
 class AIObservation(CompactSchemaModel):
     judgment: Judgment
+    abstention: (
+        Literal[
+            "INSUFFICIENT_EVIDENCE",
+            "OUTSIDE_MODEL_COMPETENCE",
+            "NOT_ASSESSABLE",
+            "MANUAL_REVIEW_REQUIRED",
+        ]
+        | None
+    ) = None
     kind: Literal[
         "STRENGTH",
         "WEAKNESS",
@@ -63,6 +90,12 @@ class AIObservation(CompactSchemaModel):
     supporting_passages: list["EvidencePassage"] = Field(default_factory=list, max_length=4)
     relationships: list["ScientificRelationship"] = Field(default_factory=list, max_length=4)
     scientific_claims: list["ScientificClaim"] = Field(default_factory=list, max_length=6)
+
+    @model_validator(mode="after")
+    def abstention_is_not_criticism(self):
+        if self.abstention and self.judgment != "NOT_ASSESSABLE":
+            raise ValueError("Abstention requires NOT_ASSESSABLE")
+        return self
 
 
 class EvidencePassage(StrictModel):
@@ -202,7 +235,7 @@ class AssessmentFinding(AIObservation):
     debate_summary: dict = Field(default_factory=dict)
 
 
-class FindingFeedback(StrictModel):
+class FindingFeedback(HumanInput):
     finding_id: str = Field(min_length=1, max_length=100)
     action: Literal[
         "ACCEPT",
@@ -230,7 +263,7 @@ class FindingFeedback(StrictModel):
     correction: str = Field(default="", max_length=1600)
 
 
-class DiscussionRequest(StrictModel):
+class DiscussionRequest(HumanInput):
     criterion_id: str = Field(min_length=1, max_length=40)
     question: str = Field(min_length=1, max_length=1000)
 
@@ -239,26 +272,38 @@ class DiscussionOutput(StrictModel):
     answer: str = Field(min_length=1, max_length=1800)
 
 
-class CriterionDecision(StrictModel):
+class CriterionDecision(HumanInput):
     criterion_id: str = Field(min_length=1, max_length=40)
     include_ai_finding: bool  # Deliberately no preselected agreement.
     conclusion: str = Field(min_length=1, max_length=1000)
     rationale: str = Field(min_length=1, max_length=1000)
     include_finding_ids: list[str] = Field(default_factory=list, max_length=7)
+    resolution: (
+        Literal[
+            "KEEP_HUMAN",
+            "ADOPT_AI",
+            "MERGE",
+            "CORRECT_AI",
+            "REJECT_AI",
+            "FURTHER_REVIEW",
+            "LEAVE_OPEN",
+        ]
+        | None
+    ) = None
 
 
 class ExplicitRelease(StrictModel):
     confirmed: Literal[True]
 
 
-class DocumentSecurityDecision(StrictModel):
+class DocumentSecurityDecision(HumanInput):
     finding_ids: list[str] = Field(max_length=200)
     allow_public_processing: bool
     rationale: str = Field(min_length=1, max_length=1000)
     confirmed: Literal[True]
 
 
-class ReviewerNote(StrictModel):
+class ReviewerNote(HumanInput):
     note_id: str | None = Field(default=None, max_length=100)
     criterion_id: str = Field(min_length=1, max_length=40)
     finding_id: str | None = Field(default=None, max_length=100)

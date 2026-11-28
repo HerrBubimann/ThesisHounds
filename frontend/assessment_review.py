@@ -1,5 +1,6 @@
 """Human-first assessment UI. API also enforces every disclosure gate."""
 
+import base64
 import json
 
 import streamlit as st
@@ -25,6 +26,10 @@ def render_assessment_review():
         path = f"{BASE}/{st.session_state.assessment_id}"
         record = request_backend("GET", path)
         assessment_phase(record)
+        st.caption(
+            "Bewertungen liegen nur im flüchtigen RAM. Ein Neustart verliert den Fall; "
+            "Hashes sind kein Nachweis revisionssicherer Archivierung."
+        )
         pilot_document = record.get("document_id", "synthetic-demo") != "synthetic-demo"
         real_mode = record.get("security", {}).get("inference") == "LOCAL_OLLAMA_PILOT"
         with st.expander("Betriebsmodus, Dokument und Datenschutz"):
@@ -109,12 +114,28 @@ def render_assessment_review():
                     st.rerun()
         if record["ai_state"] == "RUNNING":
             render_active_status(path)
-        else:
+        elif record.get("ai_released"):
             st.caption(
                 f"Abgeschlossene KI-Kriterien: {record['criteria_completed']} "
                 f"von {record['criteria_total']}. Ausführungsstand, keine Qualitätsbewertung."
             )
-        if record["ai_state"] == "PENDING" and st.button("Unabhängige KI-Bewertung starten"):
+        else:
+            st.info(
+                {
+                    "PENDING": "KI-Analyse noch nicht gestartet.",
+                    "COMPLETED": "KI-Analyse abgeschlossen. Ergebnisse bleiben bis zur "
+                    "vollständigen Erstbewertung und Ihrer Freigabe gesperrt.",
+                    "FAILED": "KI-Analyse fehlgeschlagen.",
+                }.get(record["ai_state"], "KI-Analyse abgebrochen.")
+            )
+        manual = record.get("mode") == "MANUAL_ONLY"
+        if manual:
+            st.info("Rein menschliche Begutachtung ohne KI-Unterstützung.")
+        if (
+            not manual
+            and record["ai_state"] == "PENDING"
+            and st.button("Unabhängige KI-Bewertung starten")
+        ):
             request_backend("POST", path + "/ai-review")
             st.rerun()
         if record["ai_state"] == "FAILED":
@@ -123,7 +144,16 @@ def render_assessment_review():
             )
             return
         if not record["human_completed"]:
+            if (
+                record.get("human_import_pending")
+                and path + "_import_preview" not in st.session_state
+            ):
+                st.session_state[path + "_import_preview"] = request_backend(
+                    "GET", path + "/human-review/import-preview"
+                )
             render_human(path, record["profile"]["criteria"])
+        elif manual:
+            render_manual_final(path, record)
         elif not record["ai_released"]:
             st.info(
                 "Menschliche Erstbewertung unveränderlich freigegeben. KI-Inhalte noch gesperrt."
@@ -141,12 +171,17 @@ def render_assessment_review():
 
 def render_human(path, criteria):
     st.write("Menschliche Erstbewertung")
+    if st.button("Eigene Erstbewertung beginnen"):
+        request_backend("POST", path + "/human-review/start")
+        st.rerun()
     st.caption("Alle Kriterien bearbeiten; bei fehlenden Informationen NOT_ASSESSABLE wählen.")
-    uploaded = st.file_uploader(
-        "Optional: ausgefüllte strukturierte Erstbewertung (JSON)",
-        type=["json"],
-        key=path + "_human_import",
+    st.caption(
+        "Nur Pflichtkriterien sind erforderlich. Keine Kritik erfinden: 'Keine wesentlichen "
+        "Schwächen festgestellt' ist zulässig. Nicht anwendbare oder nicht ausreichend "
+        "beurteilbare Aspekte mit eigener Begründung kennzeichnen. Formale Vollständigkeit "
+        "beweist weder das Lesen noch das Verständnis der Arbeit."
     )
+    preview = render_human_import(path)
     saved = st.session_state.get(path + "_human_draft", {})
     st.caption(
         "Entwurf nur in dieser Sitzung. Vor einem Seitenwechsel speichern;"
@@ -156,7 +191,10 @@ def render_human(path, criteria):
     with st.form(path + "_independent_human_review"):
         rows = []
         for criterion in criteria:
-            st.write(criterion["description"])
+            st.write(
+                criterion["description"]
+                + (" · Pflicht" if criterion.get("required", True) else " · Optional")
+            )
             key = f"{path}_{criterion['id']}"
             previous = saved.get(criterion["id"], {})
             for field, suffix in (
@@ -175,20 +213,33 @@ def render_human(path, criteria):
                 index=None,
                 key=key + "judgment",
             )
-            rows.append(
-                {
-                    "criterion_id": criterion["id"],
-                    "judgment": judgment,
-                    "observations": st.text_area("Beobachtungen", key=key + "observations"),
-                    "strengths": st.text_area("Stärken", key=key + "strengths"),
-                    "weaknesses": st.text_area("Kritikpunkte", key=key + "weaknesses"),
-                    "rationale": st.text_area("Begründung", key=key + "rationale"),
-                    "open_questions": st.text_area("Offene Fragen", key=key + "questions"),
-                }
-            )
+            row = {
+                "criterion_id": criterion["id"],
+                "judgment": judgment,
+                "observations": st.text_area("Beobachtungen", key=key + "observations"),
+                "strengths": st.text_area("Stärken", key=key + "strengths"),
+                "weaknesses": st.text_area("Kritikpunkte", key=key + "weaknesses"),
+                "rationale": st.text_area("Begründung", key=key + "rationale"),
+                "open_questions": st.text_area("Offene Fragen", key=key + "questions"),
+                "references": st.text_input(
+                    "Relevante Seiten oder Kapitel", key=key + "references"
+                ),
+            }
+            if criterion.get("required", True) or any(
+                row[field] for field in ("judgment", "observations", "rationale")
+            ):
+                rows.append(row)
         confirmed = st.checkbox(
             "Ich schließe meine unabhängige Erstbewertung ausdrücklich ab.",
             key=path + "_human_confirm",
+        )
+        import_confirmed = (
+            st.checkbox(
+                "Import, Kriterienzuordnung und meine ergänzten Bewertungen verbindlich geprüft",
+                key=path + "_import_confirmed",
+            )
+            if preview
+            else False
         )
         if st.form_submit_button("Entwurf in Sitzung speichern"):
             st.session_state[path + "_human_draft"] = {row["criterion_id"]: row for row in rows}
@@ -200,15 +251,104 @@ def render_human(path, criteria):
                 st.warning("Ausdrückliche Freigabe erforderlich.")
                 return
             payload = {"criteria": rows, "release": True}
-            if uploaded:
-                try:
-                    payload = json.loads(uploaded.getvalue())
-                    payload["release"] = True
-                except (ValueError, TypeError):
-                    st.error("Ungültiges JSON-Bewertungsobjekt.")
+            if preview:
+                if not import_confirmed:
+                    st.warning("Import ausdrücklich prüfen und bestätigen.")
                     return
+                payload.update(import_id=preview["import_id"], import_confirmed=True)
             request_backend("POST", path + "/human-review", json=payload)
             st.session_state.pop(path + "_human_draft", None)
+            st.rerun()
+
+
+def render_human_import(path):
+    uploaded = st.file_uploader(
+        "Bereits ausgefüllte Erstbewertung lokal importieren",
+        type=["json", "yaml", "pdf", "docx"],
+        key=path + "_human_import",
+    )
+    allowed = st.checkbox(
+        "Import enthält ausschließlich synthetische oder autorisierte öffentliche Testdaten",
+        key=path + "_import_test_data",
+    )
+    if st.button("Importvorschau lokal extrahieren", disabled=not uploaded or not allowed):
+        preview = request_backend(
+            "POST",
+            path + "/human-review/import-preview",
+            json={
+                "format": uploaded.name.rsplit(".", 1)[-1].lower(),
+                "content_base64": base64.b64encode(uploaded.getvalue()).decode(),
+                "synthetic_or_authorized_public_test_data": True,
+            },
+        )
+        st.session_state[path + "_import_preview"] = preview
+        st.session_state[path + "_import_confirmed"] = False
+        for entry in preview["mapped"]:
+            row = entry.get("form_values", {})
+            for field, suffix in (
+                ("judgment", "judgment"),
+                ("observations", "observations"),
+                ("rationale", "rationale"),
+                ("strengths", "strengths"),
+                ("weaknesses", "weaknesses"),
+                ("open_questions", "questions"),
+                ("references", "references"),
+            ):
+                if field in row:
+                    st.session_state[f"{path}_{entry['criterion_id']}{suffix}"] = row[field]
+        st.rerun()
+    preview = st.session_state.get(path + "_import_preview")
+    if preview:
+        with st.expander("Originaltext, Extraktion und Kriterienzuordnung", expanded=True):
+            st.text(preview["original_text"])
+            st.json(
+                {
+                    k: preview[k]
+                    for k in ("mapped", "unrecognized", "ambiguous", "missing_required", "warnings")
+                }
+            )
+            st.caption("Keine KI-Ergänzung. PDF-/DOCX-Text muss im Formular selbst ergänzt werden.")
+        if st.button("Import verwerfen und manuell fortfahren"):
+            request_backend("DELETE", path + "/human-review/import-preview")
+            for entry in preview["mapped"]:
+                prefix = f"{path}_{entry['criterion_id']}"
+                for key in list(st.session_state):
+                    if key.startswith(prefix):
+                        del st.session_state[key]
+            st.session_state.pop(path + "_human_draft", None)
+            st.session_state.pop(path + "_import_preview", None)
+            st.session_state.pop(path + "_import_confirmed", None)
+            st.rerun()
+    return preview
+
+
+def render_manual_final(path, record):
+    if record["state"] == "FINALIZED":
+        render_draft(path)
+        return
+    with st.form(path + "_manual_final"):
+        criterion = st.selectbox(
+            "Menschliche Entscheidung für", [c["id"] for c in record["profile"]["criteria"]]
+        )
+        conclusion = st.text_area("Menschliche Schlussfolgerung")
+        rationale = st.text_area("Begründung der Entscheidung")
+        if st.form_submit_button("Entscheidung versioniert speichern"):
+            request_backend(
+                "POST",
+                path + "/decisions",
+                json={
+                    "criterion_id": criterion,
+                    "include_ai_finding": False,
+                    "conclusion": conclusion,
+                    "rationale": rationale,
+                    "resolution": "KEEP_HUMAN",
+                },
+            )
+            st.rerun()
+    if record["state"] == "READY_FOR_FINALIZATION":
+        render_draft(path)
+        if st.button("Gutachtenentwurf abschließend menschlich freigeben"):
+            request_backend("POST", path + "/finalize", json={"confirmed": True})
             st.rerun()
 
 
@@ -266,6 +406,8 @@ def render_comparison(path, record):
             provenance = request_backend("GET", path + "/provenance")
             render_adaptive_planning(provenance.get("adaptive_planning"))
             st.text(json.dumps(provenance, ensure_ascii=False, indent=2))
+        if st.button("Menschlichen Entscheidungsverlauf anzeigen"):
+            st.json(request_backend("GET", path + "/decision-ledger"))
     for entry in comparison["discussion"]:
         st.text(f"Frage: {entry['question']}\nPrüfung: {entry['answer']}")
     if record["state"] == "FINALIZED":
@@ -299,6 +441,19 @@ def render_comparison(path, record):
         with st.form(path + "_criterion_decision"):
             criterion = st.selectbox("Menschliche Entscheidung für", ids)
             include = st.selectbox("KI-Befund übernehmen?", ["Ja", "Nein"], index=None)
+            resolution = st.selectbox(
+                "Fachliche Konfliktentscheidung (optional)",
+                [
+                    "KEEP_HUMAN",
+                    "ADOPT_AI",
+                    "MERGE",
+                    "CORRECT_AI",
+                    "REJECT_AI",
+                    "FURTHER_REVIEW",
+                    "LEAVE_OPEN",
+                ],
+                index=None,
+            )
             extras = [
                 f
                 for row in comparison["criteria"]
@@ -328,6 +483,7 @@ def render_comparison(path, record):
                             "conclusion": conclusion,
                             "rationale": rationale,
                             "include_finding_ids": selected_extras,
+                            "resolution": resolution,
                         },
                     )
                     st.rerun()

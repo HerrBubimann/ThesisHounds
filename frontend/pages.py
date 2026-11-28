@@ -212,6 +212,15 @@ def creation_wizard():
                     st.text(criterion["id"] + " · " + criterion["description"])
                 details(profile, title="Katalogversion, Herkunft und Prüfumfang")
         else:
+            payload["mode"] = st.selectbox(
+                "Begutachtungsmodus",
+                ["AI_ASSISTED", "MANUAL_ONLY"],
+                format_func=lambda mode: (
+                    "Mit unabhängiger KI-Zweitbewertung"
+                    if mode == "AI_ASSISTED"
+                    else "Rein menschlich ohne KI"
+                ),
+            )
             for key, title in (
                 ("work_type", "Arbeitstyp"),
                 ("program", "Studiengang"),
@@ -244,6 +253,7 @@ def creation_wizard():
             st.session_state.wizard_step = step + 1
             st.rerun()
     elif forward.button("Begutachtung anlegen", type="primary", disabled=not valid):
+        payload["profile_confirmed"] = True
         record = api_client.request_backend("POST", BASE, json=payload)
         select_assessment(record["id"])
         for key in list(st.session_state):

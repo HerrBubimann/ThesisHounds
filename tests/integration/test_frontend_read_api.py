@@ -66,7 +66,13 @@ def test_original_pdf_is_verified_acl_scoped_and_rejects_changes(tmp_path):
         TestClient(app) as client,
     ):
         record = client.post(
-            BASE, json={"work_type": "PA1", "profile_id": "pa1-example", "document_id": key}
+            BASE,
+            json={
+                "work_type": "PA1",
+                "profile_confirmed": True,
+                "profile_id": "pa1-example",
+                "document_id": key,
+            },
         ).json()
         path = BASE + "/" + record["id"] + "/original-pdf"
         response = client.get(path)

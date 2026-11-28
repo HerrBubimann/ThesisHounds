@@ -15,6 +15,31 @@ def content_digest(value):
     ).hexdigest()
 
 
+def review_snapshot(record, origin, content, *, actor=None):
+    """Serialized immutable value in the existing scoped RAM store, not archival proof."""
+    from uuid import uuid4
+
+    value = {
+        "schema_version": "independent-review.v1",
+        "review_id": str(uuid4()),
+        "assessment_id": record.id,
+        "origin": origin,
+        "revision": 1,
+        "document_id": record.document.document_id,
+        "document_sha256": content_digest(record.document.model_dump(mode="json")),
+        "document_version": content_digest(record.document.pages),
+        "catalog_version": record.profile.version,
+        "catalog_sha256": content_digest(record.profile.model_dump()),
+        "actor": actor,
+        "identity_verified": False,
+        "submitted_at": now().isoformat(),
+        "content": content,
+        "storage": "VOLATILE_RAM_NO_RESTART_RECOVERY_NOT_TAMPER_PROOF",
+    }
+    value["integrity_sha256"] = content_digest(value)
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
 def snapshot(record, config):
     sha = os.getenv("THESISHOUNDS_GIT_SHA", "")
     return {

@@ -4,15 +4,91 @@ import hashlib
 import json
 import re
 from itertools import combinations
+from typing import Literal
 
 from app.schemas.domain import StrictModel
-from pydantic import Field, StrictBool, model_validator
+from pydantic import ConfigDict, Field, StrictBool, model_validator
 
 
 def digest(value) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode()
     ).hexdigest()
+
+
+class RelianceTrial(StrictModel):
+    """Explicit research data, never inferred from agreement or production telemetry."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    condition: Literal["A_EARLY_AI", "B_EVIDENCE", "C_HUMAN_FIRST", "D_DISCUSSION"]
+    trial_id: str = Field(min_length=1, max_length=100)
+    participant_code: str = Field(min_length=1, max_length=100)
+    reference_id: str = Field(min_length=1, max_length=100)
+    ai_correct: StrictBool
+    adopted_ai: StrictBool
+    initial_correct: StrictBool | None = None
+    final_correct: StrictBool
+    elapsed_seconds: float = Field(ge=0, allow_inf_nan=False)
+    usability: int | None = Field(default=None, ge=1, le=7)
+    perceived_control: int | None = Field(default=None, ge=1, le=7)
+    traceability: int | None = Field(default=None, ge=1, le=7)
+    professional_acceptance: int | None = Field(default=None, ge=1, le=7)
+
+
+def reliance_metrics(trials, *, approved_protocol, dataset_kind, validated_reference_ids):
+    """Offline descriptive summaries only; no experimental disclosure API is installed."""
+    if (
+        not isinstance(approved_protocol, str)
+        or not approved_protocol.strip()
+        or dataset_kind not in {"SYNTHETIC", "APPROVED_RESEARCH_TEST_DATA"}
+        or not validated_reference_ids
+    ):
+        raise ValueError("APPROVED_PROTOCOL_AND_HUMAN_REFERENCES_REQUIRED")
+    rows = [RelianceTrial.model_validate(t) for t in trials]
+    if len({r.trial_id for r in rows}) != len(rows):
+        raise ValueError("DUPLICATE_TRIAL")
+    if any(r.reference_id not in validated_reference_ids for r in rows):
+        raise ValueError("HUMAN_VALIDATED_REFERENCE_REQUIRED")
+    result = {}
+    for condition in sorted({r.condition for r in rows}):
+        group = [r for r in rows if r.condition == condition]
+        correct = [r for r in group if r.ai_correct]
+        incorrect = [r for r in group if not r.ai_correct]
+        paired = [r for r in group if r.initial_correct is not None]
+        result[condition] = {
+            "n": len(group),
+            "correct_ai_adoption": sum(r.adopted_ai for r in correct) / len(correct)
+            if correct
+            else None,
+            "incorrect_ai_adoption": sum(r.adopted_ai for r in incorrect) / len(incorrect)
+            if incorrect
+            else None,
+            "unsupported_criticism_rejection": sum(not r.adopted_ai for r in incorrect)
+            / len(incorrect)
+            if incorrect
+            else None,
+            "final_reference_accuracy": sum(r.final_correct for r in group) / len(group),
+            "paired_initial_final_outcome_changes": sum(
+                r.initial_correct != r.final_correct for r in paired
+            ),
+            "paired_n": len(paired),
+            "mean_elapsed_seconds": sum(r.elapsed_seconds for r in group) / len(group),
+            "subjective_ratings": {
+                field: [getattr(r, field) for r in group if getattr(r, field) is not None]
+                for field in (
+                    "usability",
+                    "perceived_control",
+                    "traceability",
+                    "professional_acceptance",
+                )
+            },
+        }
+    return {
+        "conditions": result,
+        "protocol": approved_protocol,
+        "empirical_effectiveness_established": False,
+        "interpretation": "DESCRIPTIVE_ONLY_NO_CAUSAL_OR_INDIVIDUAL_BIAS_DIAGNOSIS",
+    }
 
 
 def feedback_codes(action, reason):

@@ -98,6 +98,7 @@ def test_pdf_to_human_finalization_through_real_adapter_with_mock_http(tmp_path)
                 "/api/v1/assessments",
                 json={
                     "work_type": "PA1",
+                    "profile_confirmed": True,
                     "profile_id": "pa1-example",
                     "document_id": key,
                 },
@@ -178,6 +179,7 @@ def test_pilot_abort_delete_and_restart_explicitly_have_no_recovery(tmp_path):
                 "/api/v1/assessments",
                 json={
                     "work_type": "PA1",
+                    "profile_confirmed": True,
                     "profile_id": "pa1-example",
                     "document_id": key,
                 },

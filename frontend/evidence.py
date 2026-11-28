@@ -185,7 +185,8 @@ def review_explorer(path, record, comparison):
                 left, right = st.columns(2)
                 with left:
                     st.write("**Menschliche Erstbewertung**")
-                    status_badges(row["human"]["judgment"])
+                    human = row.get("human") or {}
+                    status_badges(human.get("judgment", "NOT_ASSESSABLE"))
                     for key in (
                         "observations",
                         "strengths",
@@ -193,8 +194,12 @@ def review_explorer(path, record, comparison):
                         "rationale",
                         "open_questions",
                     ):
-                        if row["human"].get(key):
-                            st.text(row["human"][key])
+                        if human.get(key):
+                            st.text(human[key])
+                    st.caption(
+                        "Status vergleicht Bewertungskategorien. Semantische Übereinstimmung "
+                        "und wissenschaftliche Qualität sind dadurch nicht nachgewiesen."
+                    )
                 with right:
                     st.write("**Unabhängige KI-Zweitbewertung**")
                     if row.get("ai"):

@@ -23,9 +23,13 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         TestClient(application) as client,
     ):
         assert len(client.get(BASE + "/profiles").json()) == 3
-        response = client.post(BASE, json={"work_type": "PA1", "profile_id": "ba-example"})
+        response = client.post(
+            BASE, json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "ba-example"}
+        )
         assert response.status_code == 422
-        record = client.post(BASE, json={"work_type": "PA1", "profile_id": "pa1-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"}
+        ).json()
         path, key = BASE + "/" + record["id"], record["id"]
         assert client.get(path + "/document").json()["classification"] == "PUBLIC"
         for suffix in ["/comparison", "/draft"]:
@@ -132,7 +136,9 @@ def test_invalid_model_output_fails_closed(tmp_path):
         patch("app.main.create_provider", return_value=AssessmentProvider(fail=True)),
         TestClient(app) as client,
     ):
-        record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "BA", "profile_confirmed": True, "profile_id": "ba-example"}
+        ).json()
         key, path = record["id"], BASE + "/" + record["id"]
         assert client.post(path + "/ai-review").status_code == 202
 
@@ -154,7 +160,9 @@ def test_cancellation_and_shared_active_run_limit(tmp_path):
         patch("app.main.create_provider", return_value=AssessmentProvider(delay=30)),
         TestClient(app) as client,
     ):
-        record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "BA", "profile_confirmed": True, "profile_id": "ba-example"}
+        ).json()
         path = BASE + "/" + record["id"]
         assert client.post(path + "/ai-review").status_code == 202
         assert client.post("/api/v1/runs", json=RunRequest().model_dump()).status_code == 429

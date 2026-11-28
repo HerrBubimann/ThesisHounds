@@ -21,7 +21,9 @@ def test_unauthorized_create_has_no_document_or_assessment_side_effect(tmp_path)
         with pytest.raises(LLMError):
             app.start(RunRequest())
         with pytest.raises(LLMError):
-            app.assessments.create(AssessmentRequest(work_type="PA1", profile_id="pa1-example"))
+            app.assessments.create(
+                AssessmentRequest(work_type="PA1", profile_confirmed=True, profile_id="pa1-example")
+            )
         assert not app.runs and not app.assessments.records
         assert not app.store.root.exists()
     finally:
@@ -43,7 +45,8 @@ def test_default_mock_supports_full_synthetic_analysis_without_http_calls(tmp_pa
             assert result["data_classification"] == "PUBLIC"
             assert client.delete("/api/v1/runs/" + run["run_id"]).status_code == 204
             record = client.post(
-                "/api/v1/assessments", json={"work_type": "PA1", "profile_id": "pa1-example"}
+                "/api/v1/assessments",
+                json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"},
             ).json()
             path = "/api/v1/assessments/" + record["id"]
             assert client.post(path + "/ai-review").status_code == 202

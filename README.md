@@ -17,8 +17,10 @@ Beispielkriterien sind keine offiziellen DHBW-Kataloge.
 
 1. Über **Neue Begutachtung** Arbeitstyp, Studiengang, Jahrgang, zugelassenes Dokument
    und Bewertungskatalog wählen; Testdatengrenze und Anlage ausdrücklich bestätigen.
-2. Dokument lesen und menschliche Erstbewertung je Kriterium verfassen. Entwürfe können
-   ausdrücklich in der Browsersitzung gespeichert werden; die Erstfreigabe ist unveränderlich.
+2. Dokument lesen und menschliche Erstbewertung je Pflichtkriterium verfassen oder eine
+   lokale JSON-/YAML-/PDF-/DOCX-Importvorschau prüfen und ergänzen. Entwürfe können
+   ausdrücklich in der Browsersitzung gespeichert werden; die Erstfreigabe wird als
+   eigener integritätsgeprüfter, flüchtiger Bewertungsstand erhalten.
 3. Unabhängige KI-Prüfung starten. Sie erhält keine menschliche Erstbewertung; Ergebnisse
    bleiben bis zum Abschluss beider Bewertungen und ausdrücklicher Vergleichsfreigabe verborgen.
 4. Mensch-/KI-Einschätzungen neutral vergleichen, Befunde und Originalzitate prüfen,
@@ -29,6 +31,12 @@ Beispielkriterien sind keine offiziellen DHBW-Kataloge.
 Die RESTRICTED-KI-Diskussion bleibt durch die Backendpolicy gesperrt. Eine
 dokumentierte menschliche Prüfung ohne Modell ist möglich. Ein Zitat, Metadatentreffer
 oder Modellkonsens beweist keine fachliche Richtigkeit.
+
+Alternativ lässt sich bei der Anlage **MANUAL_ONLY** wählen: Erstbewertung,
+kriterienspezifische Schlussentscheidungen und Finalisierung ohne Modellaufruf.
+Dieser Modus öffnet keine KI-Funktionen. Die API verlangt bei der Anlage
+`profile_confirmed: true`; Dokument-/Katalogwechsel und veränderte Erstbewertungen
+sperren die weitere Offenlegung. RAM-Snapshots sind keine revisionssichere Archivierung.
 
 [Einfach erklärt](Erklärungs.md) · [vollständiger Ablauf](docs/frontend/review_workflow.md) ·
 [Anlage, API und Pilotvoraussetzungen](docs/setup.md)
@@ -144,9 +152,11 @@ Privacy-Benchmarks, npm-Audit, Trivy und Runtime-Smoke werden dort getrennt ausg
 Die kombinierte Coverage-Grenze bleibt **80 %**. Required Check:
 **`thesishounds-ci-gate`**, acht Pflichtjobs plus Gate.
 
-Aktueller lokaler Testnachweis vom 28.11.2026: **956 Tests bestanden,
-87,06 % kombinierte Coverage**. Die Gutachterwerkzeuge wurden um konservativere
-Zahlen-/Dublettenprüfung, beleggebundene Rückfragen und Messmatrix-Aggregate ergänzt.
+Aktueller lokaler Testnachweis vom 28.11.2026: **1005 Tests bestanden,
+86,77 % kombinierte Coverage**. Das Human-First-Gate wurde um vollständige
+Integritäts-/Versionsbindungen, kontrollierte Importvorschauen, ein menschliches
+Entscheidungsledger und einen rein menschlichen Ablauf erweitert. Ruff, Syntaxprüfung,
+Bandit, Datenschutzscan und Docker-Konfigurationsprüfung bestanden.
 Backend-/Frontend-Build, Container-E2E, Browserprüfung und Imagescans stammen aus
 der vorherigen Frontenditeration. Unfixierte Basisimagebefunde und institutionelle
 Freigaben bleiben offen; ein erfolgreicher Remote-CI-Lauf ist damit nicht belegt.
@@ -157,6 +167,9 @@ Freigaben bleiben offen; ein erfolgreicher Remote-CI-Lauf ist damit nicht belegt
 ## Dokumentationswegweiser und Historie
 
 - [Requirements und Umsetzungsstand](docs/requirements/traceability.md)
+- [Human-First-Audit, Umsetzung und Testnachweise](docs/architecture/human_first_assessment.md)
+- [Automation Bias: Forschungsgrundlage](docs/research/automation_bias.md)
+- [Kontrolliertes Reliance-Studienprotokoll](docs/evaluation/human_ai_reliance.md)
 - [DHBW-Quellen und Anwendbarkeit](docs/dhbw/mosbach_sources.md)
 - [Lokale wissenschaftliche Infrastruktur](docs/research/local_scientific_infrastructure.md)
 - [Offene Hochschulfragen](docs/stakeholders/open_questions.md)

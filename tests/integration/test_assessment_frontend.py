@@ -95,3 +95,56 @@ def test_synthetic_human_first_review_through_ui(tmp_path):
             assert any("Menschlich freigegeben" in text.value for text in app.text)
             click(app, "Weitere synthetische Begutachtung")
             assert "assessment_id" not in app.session_state
+
+
+def test_manual_only_workspace_finishes_without_a_model_call(tmp_path):
+    from tests.fixtures.assessments import human_submission
+
+    api = create_app(Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path))
+    provider = AssessmentProvider()
+    with patch("app.main.create_provider", return_value=provider), TestClient(api) as client:
+        base = "/api/v1/assessments"
+        created = client.post(
+            base,
+            json={
+                "work_type": "PA1",
+                "profile_id": "pa1-example",
+                "profile_confirmed": True,
+                "mode": "MANUAL_ONLY",
+            },
+        ).json()
+        key = created["id"]
+        path = base + "/" + key
+        client.post(path + "/human-review", json=human_submission())
+
+        def backend(method, route, **kwargs):
+            response = client.request(method, route, **kwargs)
+            if response.is_error:
+                raise BackendError("Aktion nicht freigegeben")
+            return response.json()
+
+        with (
+            patch("frontend.assessment_review.request_backend", side_effect=backend),
+            patch("frontend.api_client.request_backend", side_effect=backend),
+        ):
+            ui = AppTest.from_string(
+                "from frontend.assessment_review import render_assessment_review\n"
+                "render_assessment_review()",
+                default_timeout=10,
+            )
+            ui.session_state.assessment_id = key
+            ui.run()
+            assert not ui.exception
+            assert not any(
+                button.label == "Unabhängige KI-Bewertung starten" for button in ui.button
+            )
+            for criterion in ["literature", "methodology", "structure"]:
+                next(b for b in ui.selectbox if b.label == "Menschliche Entscheidung für").select(
+                    criterion
+                )
+                for field in ui.text_area:
+                    field.set_value("Unabhängige fachliche Begründung")
+                click(ui, "Entscheidung versioniert speichern")
+            click(ui, "Gutachtenentwurf abschließend menschlich freigeben")
+            assert client.get(path).json()["state"] == "FINALIZED"
+            assert not provider.contexts

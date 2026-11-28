@@ -18,7 +18,7 @@ class StrictModel(BaseModel):
 
 
 class CompactSchemaModel(StrictModel):
-    """Drop display titles from LLM wire schemas, preserving every validation constraint."""
+    """Omit display/default annotations, preserving all LLM validation constraints."""
 
     @classmethod
     def model_json_schema(cls, *args, **kwargs):
@@ -31,7 +31,7 @@ class CompactSchemaModel(StrictModel):
                     if k in {"properties", "$defs"}
                     else strip_titles(v)
                     for k, v in value.items()
-                    if k != "title"
+                    if k not in {"title", "default"}
                 }
             if isinstance(value, list):
                 return [strip_titles(v) for v in value]

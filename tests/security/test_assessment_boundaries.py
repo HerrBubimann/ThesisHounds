@@ -45,7 +45,12 @@ def test_untrusted_input_cannot_enable_tools_scores_uploads_or_verification():
                 {"terms": "query", "classification": "PUBLIC", "provider": "crossref", **fields}
             )
     with pytest.raises(ValidationError):
-        AssessmentRequest(work_type="BA", profile_id="ba-example", document_id="real-thesis.pdf")
+        AssessmentRequest(
+            work_type="BA",
+            profile_confirmed=True,
+            profile_id="ba-example",
+            document_id="real-thesis.pdf",
+        )
     with pytest.raises(ValidationError):
         HumanReviewSubmission(criteria=[], release=True)
     with pytest.raises(ValidationError):

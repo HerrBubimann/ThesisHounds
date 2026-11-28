@@ -104,13 +104,21 @@ def test_g17_missing_optional_finding_can_be_compared_and_finalized(tmp_path):
         app = runtime(tmp_path)
         app.gateway.providers["ollama"] = AssessmentProvider()
         flow = app.assessments
-        record = flow.create(AssessmentRequest(work_type="PA1", profile_id="pa1-example"))
+        record = flow.create(
+            AssessmentRequest(work_type="PA1", profile_confirmed=True, profile_id="pa1-example")
+        )
         key = record["id"]
         item = flow.records[key]
         item.profile.criteria[-1].required = False
+        item.confirmed_binding = flow.binding(item)
         item.ai = await flow.reviewer.review(key, item.document, item.profile, item.budget)
         item.ai = [f for f in item.ai if f.criterion_id != "structure"]
         item.ai_state = "COMPLETED"
+        from app.assessments.provenance import review_snapshot
+
+        item.ai_snapshot = review_snapshot(
+            item, "AI_INDEPENDENT_REVIEW", [f.model_dump() for f in item.ai]
+        )
         flow.submit_human(key, HumanReviewSubmission.model_validate(human_submission()))
         flow.release_ai(key)
         row = flow.comparison(key)["criteria"][-1]

@@ -64,7 +64,9 @@ def test_private_catalog_is_not_disclosed_by_the_development_create_route(tmp_pa
     app = runtime(tmp_path)
     app.assessments.profiles.profiles["pa1-example"].data_classification = "RESTRICTED"
     with pytest.raises(LLMError):
-        app.assessments.create(AssessmentRequest(work_type="PA1", profile_id="pa1-example"))
+        app.assessments.create(
+            AssessmentRequest(work_type="PA1", profile_confirmed=True, profile_id="pa1-example")
+        )
     assert not app.assessments.records and not app.provider.calls
 
 

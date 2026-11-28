@@ -36,6 +36,7 @@ def seed_synthetic_review(document_id="synthetic-demo"):
         "/api/v1/assessments",
         {
             "work_type": "PA1",
+            "profile_confirmed": True,
             "profile_id": "pa1-example",
             "document_id": document_id,
         },

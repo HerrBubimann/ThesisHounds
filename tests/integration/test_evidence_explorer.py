@@ -19,7 +19,8 @@ def test_evidence_is_scoped_embargoed_and_selectively_human_approved(tmp_path):
         TestClient(application) as client,
     ):
         key = client.post(
-            "/api/v1/assessments", json={"work_type": "PA1", "profile_id": "pa1-example"}
+            "/api/v1/assessments",
+            json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"},
         ).json()["id"]
         path = "/api/v1/assessments/" + key
         client.post(path + "/ai-review")
