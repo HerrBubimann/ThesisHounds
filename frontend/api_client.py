@@ -15,7 +15,18 @@ class BackendError(Exception):
     """A message safe for display in the dashboard."""
 
 
-def request_backend(method: str, path: str, **kwargs) -> dict:
+def request_backend(method: str, path: str, **kwargs) -> dict | list:
+    return _request(method, path, **kwargs)
+
+
+def request_pdf(path: str) -> bytes:
+    """Binary original through exactly the same pinned server-side transport."""
+    if not path.endswith("/original-pdf"):
+        raise BackendError("Nicht freigegebenes Backend-Ziel.")
+    return _request("GET", path, pdf=True)
+
+
+def _request(method: str, path: str, *, pdf=False, **kwargs):
     base_url = os.getenv("BACKEND_URL", "http://backend:8000")
     try:
         target = httpx.URL(base_url)
@@ -51,6 +62,13 @@ def request_backend(method: str, path: str, **kwargs) -> dict:
             follow_redirects=False,
         ) as client:
             with client.stream(method, path, follow_redirects=False, **kwargs) as response:
+                if pdf and not response.is_error and not response.is_redirect:
+                    if response.headers.get("content-type", "").split(";")[0] != "application/pdf":
+                        raise ValueError("Expected PDF")
+                    data = _read_bytes(response)
+                    if not data.startswith(b"%PDF-"):
+                        raise ValueError("Expected PDF")
+                    return bytes(data)
                 return read_response(response)
     except httpx.TimeoutException:
         raise BackendError(
@@ -67,6 +85,11 @@ def read_response(response):
         raise BackendError("Backend-Weiterleitung ist nicht freigegeben.")
     if response.is_error:
         messages = {
+            401: "Eine verifizierte Anmeldung ist erforderlich.",
+            405: "Diese Schnittstelle erlaubt keine Änderung.",
+            423: (
+                "Weitere Dokumentverarbeitung ist bis zur menschlichen Sicherheitsprüfung gesperrt."
+            ),
             422: "Eingabe entspricht nicht dem freigegebenen API-Schema.",
             403: "Aktion ist durch die Datenschutzrichtlinie gesperrt.",
             404: "Analyse, Agent oder Befund wurde nicht gefunden oder bereits bereinigt.",
@@ -81,12 +104,16 @@ def read_response(response):
         raise BackendError(messages.get(response.status_code, "Backend-Anfrage fehlgeschlagen."))
     if response.status_code == 204:
         return {}
+    data = json.loads(_read_bytes(response))
+    if not isinstance(data, (dict, list)):
+        raise ValueError("Expected object")
+    return data
+
+
+def _read_bytes(response):
     content = bytearray()
     for chunk in response.iter_bytes():
         if len(content) + len(chunk) > MAX_BACKEND_RESPONSE_BYTES:
             raise BackendError("Die Backend-Antwort überschreitet das zulässige Größenlimit.")
         content.extend(chunk)
-    data = json.loads(content)
-    if not isinstance(data, (dict, list)):
-        raise ValueError("Expected object")
-    return data
+    return content

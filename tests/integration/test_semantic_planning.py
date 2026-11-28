@@ -36,7 +36,12 @@ def test_planning_is_embargoed_and_bound_to_a_registered_pdf(tmp_path):
     with patch("app.main.create_provider", return_value=provider), TestClient(app) as client:
         response = client.post(
             "/api/v1/assessments",
-            json={"work_type": "PA1", "profile_id": "pa1-example", "document_id": document_id},
+            json={
+                "work_type": "PA1",
+                "profile_confirmed": True,
+                "profile_id": "pa1-example",
+                "document_id": document_id,
+            },
         )
         assert response.status_code == 201
         path = "/api/v1/assessments/" + response.json()["id"]

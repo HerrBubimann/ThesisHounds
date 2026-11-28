@@ -16,7 +16,7 @@ flowchart LR
   subgraph Private[Private Verarbeitungsgrenze - derzeit DEVELOPMENT]
     I --> C[Öffentlicher read-only Metadatencache]
     I --> K[Regelkandidaten / getrennte Freigabeprüfung]
-    D[Servereigene synthetische Arbeit] --> V[Lokale Zitations- und Formalprüfung]
+    D[Zugelassene PUBLIC-Fixture oder registrierter öffentlicher Pilot] --> V[Lokale Zitations- und Formalprüfung]
     C --> V
     K --> V
     V --> E[Embargo bis unabhängige Erstbewertung abgeschlossen]

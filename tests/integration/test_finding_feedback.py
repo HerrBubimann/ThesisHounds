@@ -13,12 +13,24 @@ BASE = "/api/v1/assessments"
 
 
 @contextmanager
-def assessment(tmp_path, *, release=True):
+def assessment(tmp_path, *, release=True, ai_transform=None):
     app = create_app(Settings(_env_file=None, config_dir=CONFIG, document_store_dir=tmp_path))
     provider = AssessmentProvider()
     with patch("app.main.create_provider", return_value=provider), TestClient(app) as client:
-        key = client.post(BASE, json={"work_type": "PA1", "profile_id": "pa1-example"}).json()["id"]
+        key = client.post(
+            BASE, json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"}
+        ).json()["id"]
         path = BASE + "/" + key
+        if ai_transform:
+            service = app.state.runtime.assessments
+            original = service.reviewer.review
+
+            async def transformed(*args, **kwargs):
+                findings = await original(*args, **kwargs)
+                ai_transform(findings)
+                return findings
+
+            service.reviewer.review = transformed
         client.post(path + "/ai-review")
 
         async def wait():
@@ -116,6 +128,8 @@ def test_provenance_records_snapshot_versions_unknown_git_and_actual_models(tmp_
         assert all(f["provenance"]["model_digest"] for f in value["findings"])
         original = value["catalog_version"]
         app.state.runtime.assessments.records[key].profile.version = "MUTATED_TEST"
+        assert client.get(path + "/provenance").status_code == 409
+        app.state.runtime.assessments.records[key].profile.version = original
         assert client.get(path + "/provenance").json()["catalog_version"] == original
 
 
@@ -200,9 +214,7 @@ def test_only_actually_checked_local_sources_enter_research_provenance(tmp_path)
                 }
             }
         )
-        client.get(path + "/academic-checks")
-        value = client.get(path + "/provenance").json()
-        assert value["research_sources"][0]["provider"] == "crossref"
-        assert value["research_sources"][0]["snapshot_sha256"] == "a" * 64
-        assert value["research_sources"][0]["checked_at"]
-        assert not value["current_document_matches_snapshot"]
+        # A new document cannot append sources to an already released scientific review.
+        assert client.get(path + "/academic-checks").status_code == 409
+        assert client.get(path + "/provenance").status_code == 409
+        assert client.get(path + "/draft").status_code == 409

@@ -1,10 +1,19 @@
 # Kostenlose Rechercheprovider und tatsächlich freigegebener Umfang
 
+Datierter Recherchebericht vom **27.11.2026**: [erneute Prüfung aller fünfzehn Datenquellen](scientific_sources_2026-11-27.md)
+und [lokale Import-/Betriebsgrenzen](local_scientific_infrastructure.md).
+Die folgende Tabelle dokumentiert den historischen Stand vom 26.11.2026; ihre
+Adapterliste und unbestätigten Zugangsangaben sind durch den neuen Bericht überholt.
+
 Offizielle Dokumentation geprüft am 26.11.2026 UTC. Kein API-Konto angelegt, kein
 kostenpflichtiger Aufruf, kein Gesamtdatensatz heruntergeladen. Zugang/Limits können sich ändern.
 **Alle Registry-Provider sind in der Anwendung `LOCAL_IMPORT_ONLY`, Netzwerk aus,
-Kostenobergrenze 0 USD.** Crossref/OpenAlex/Retraction Watch haben Importadapter;
-die übrigen Einträge dokumentieren Kandidaten, keine vorgetäuschte Onlineintegration.
+Kostenobergrenze 0 USD.** Codeabgleich 28.11.2026: Offlineadapter für Crossref,
+OpenAlex, Retraction Watch, DBLP, Open Library, DataCite, Zenodo und den separat
+rechtegeprüften `library_export` sind implementiert. Weitere Registry-Namen sind
+Kandidaten und erzeugen `PROVIDER_ADAPTER_NOT_RELEASED`. Die historische Tabelle
+unten ist keine aktuelle Implementierungsliste. Externe Tarif-/Zugangsangaben wurden
+bei dieser Dokumentationspflege nicht erneut live bestätigt.
 
 | Provider / Originaldokumentation | Zugang, Limit und Lizenzstand | Verwendung und MVP-Status |
 |---|---|---|

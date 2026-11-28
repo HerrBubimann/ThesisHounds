@@ -26,7 +26,10 @@ zusätzliche Reviewpaket; er beweist keinen isolierten Effekt eines einzelnen
 deterministischen Validators. Tatsächlich eingesetzte Modell-IDs/Digests und die
 Zuordnungsquelle werden gespeichert. Fehlende Modellvielfalt ist zu berichten.
 
-Pro Lauf: identische serverseitige synthetische Fixture und Beispielkatalog,
+Pro Vergleich: identische zugelassene Dokument-/Katalogdaten; standardmäßig die
+serverseitige synthetische Fixture und der Beispielkatalog. Der kontrollierte Pilot
+kann registrierte unabhängig geprüfte öffentliche Test-PDFs mit festem Katalog nutzen.
+Pro Lauf:
 separates Budget, vollständige Konfig-/Promptnachweise, Eingabemanifest, Modellmetadaten,
 Umgebung und Rohbeobachtungen. Modell-Seed bleibt ungesetzt und wird als `null`
 dokumentiert. Auch Temperatur 0 ist keine Determinismusgarantie. Reale GPU-/Token-

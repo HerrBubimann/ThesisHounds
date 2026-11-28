@@ -62,10 +62,13 @@ def render_control_center() -> None:
             "RAM verfügbar (OS-Sicht)", f"{resources['ram_available_bytes'] / 1024**3:.1f} GiB"
         )
         columns[2].metric("Aktive Agenten", resources["active_agents"])
-        used = sum(m["vram_bytes"] for m in resources.get("loaded_models", []))
+        values = [m.get("vram_bytes") for m in resources.get("loaded_models", [])]
+        used = sum(values) if all(type(v) is int and v >= 0 for v in values) else None
         columns[3].metric(
             "VRAM der Ollama-Modelle",
-            "Unbekannt" if resources.get("vram_unavailable") else f"{used / 1024**3:.1f} GiB",
+            "Unbekannt"
+            if resources.get("vram_unavailable") or used is None
+            else f"{used / 1024**3:.1f} GiB",
         )
         st.caption(
             "OS-Metriken sind keine vollständige Messung der einzelnen Container. "
@@ -84,7 +87,7 @@ def render_control_center() -> None:
                 "POST", "/api/v1/runs", json={"mode": mode, "document_id": "synthetic-demo"}
             )
             st.session_state["selected_run"] = created["run_id"]
-            st.success("Analyse gestartet. Status wird regelmäßig aktualisiert.")
+            st.success("Analyse gestartet. Statusansicht wird bei aktiven Läufen aktualisiert.")
         values = request_backend("GET", "/api/v1/runs")
         if not values:
             st.info(
@@ -97,6 +100,10 @@ def render_control_center() -> None:
             "Analyse", ids, index=ids.index(previous) if previous in ids else len(ids) - 1
         )
         run = request_backend("GET", f"/api/v1/runs/{selected}")
+        if run["status"] in {"RUNNING", "QUEUED"}:
+            render_active_run_status(selected)
+        elif st.button("Laufstatus aktualisieren"):
+            st.rerun()
         if run.get("mocked"):
             st.warning("MOCK-DATEN: Dieser Lauf verwendet einen simulierten Testprovider.")
         st.progress(run["progress"], text=f"{run['status']} · {run['stage']}")
@@ -150,6 +157,18 @@ def render_control_center() -> None:
         st.warning(
             "Control Center momentan nicht vollständig verfügbar. Backend und Modelle prüfen."
         )
+
+
+@st.fragment(run_every="5s")
+def render_active_run_status(run_id):
+    try:
+        run = request_backend("GET", f"/api/v1/runs/{run_id}")
+    except BackendError as exc:
+        st.error(str(exc))
+        return
+    if run["status"] not in {"RUNNING", "QUEUED"}:
+        st.rerun()
+    st.caption("Aktiver Legacy-Lauf · Statusabfrage alle fünf Sekunden")
 
 
 def render_finding(finding: dict, run: dict) -> None:

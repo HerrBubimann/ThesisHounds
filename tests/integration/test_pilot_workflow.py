@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from streamlit.testing.v1 import AppTest
 
 from tests.fixtures.assessments import AssessmentProvider, human_submission
+from tests.fixtures.frontend import create_case_ui
 from tests.fixtures.pilot import pilot_setup
 
 
@@ -97,6 +98,7 @@ def test_pdf_to_human_finalization_through_real_adapter_with_mock_http(tmp_path)
                 "/api/v1/assessments",
                 json={
                     "work_type": "PA1",
+                    "profile_confirmed": True,
                     "profile_id": "pa1-example",
                     "document_id": key,
                 },
@@ -177,6 +179,7 @@ def test_pilot_abort_delete_and_restart_explicitly_have_no_recovery(tmp_path):
                 "/api/v1/assessments",
                 json={
                     "work_type": "PA1",
+                    "profile_confirmed": True,
                     "profile_id": "pa1-example",
                     "document_id": key,
                 },
@@ -215,19 +218,16 @@ def test_pilot_pdf_can_be_selected_in_ui_with_explicit_inference_mode(tmp_path, 
             assert response.is_success
             return response.json()
 
-        with patch("frontend.assessment_review.request_backend", side_effect=backend):
+        with (
+            patch("frontend.assessment_review.request_backend", side_effect=backend),
+            patch("frontend.api_client.request_backend", side_effect=backend),
+        ):
             ui = AppTest.from_string(
                 "from frontend.assessment_review import render_assessment_review\n"
                 "render_assessment_review()",
                 default_timeout=10,
             ).run()
-            next(
-                b for b in ui.button if b.label == "Kontrollierte Pilotdatei auswählen"
-            ).click().run()
-            assert not ui.exception
-            assert next(s for s in ui.selectbox if s.label == "Geprüfte Test-PDF").value == key
-            assert next(s for s in ui.selectbox if s.label == "Arbeitstyp").options == ["PA1"]
-            next(b for b in ui.button if b.label == "Pilotbegutachtung anlegen").click().run()
+            create_case_ui(ui, document_id=key)
             assert not ui.exception
             assert any("operatorgeprüfte Pilot-PDF" in c.value for c in ui.caption)
             expected = (

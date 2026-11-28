@@ -16,8 +16,9 @@ Hybrides Ranking kombiniert Stichwortüberdeckung mit Cosinusähnlichkeit lokale
 Deterministisches Reranking bevorzugt Kapiteldiversität. Keine Gewichtsdownloads,
 Cloudembeddings, Persistenz, Telemetrie oder externen Indizes. Diese Vektoren sind
 **keine vortrainierten semantischen Embeddings**; Suchqualität, Lexikonabdeckung und
-Hashkollisionen müssen mit freigegebenen Referenzpassagen geprüft werden. Ein späterer
-gelernter lokaler Embedder benötigt Artefakt-/Lizenz-/Privacyfreigabe und eigene Tests.
+Hashkollisionen müssen mit freigegebenen Referenzpassagen geprüft werden. Der optionale lokale Encoderpfad ist inzwischen implementiert, benötigt aber
+Artefakt-/Lizenz-/Privacyfreigabe und eigene Qualitäts-/Laufzeitnachweise. Ohne diese
+bleiben gelernte Encoder explizit blockiert; Feature-Hash ist weiterhin die Baseline.
 
 Jeder Index gehört genau einer Analyse und einem Dokument; fremder Scope wird
 abgewiesen. Serverseitige `allowed_pages` schränken auch die erweiterte Suche ein.
@@ -45,3 +46,11 @@ Identitätsheader auf der ersten Seite können lokal längenerhaltend maskiert w
 Bewertungsrelevante Firmen-/Methodeninformationen im Fließtext bleiben erhalten.
 Keine allgemeine Anonymisierung oder Deidentifizierung wird behauptet. Originalzitate
 werden weiterhin gegen das lokale Original geprüft. Siehe [Fairness](../evaluation/fairness.md).
+
+## Ergänzung vom 28.11.2026
+
+FTS5 verwendet jetzt eine threadgeschützte, wiederverwendete RAM-Verbindung je
+Dokument mit explizitem Lebenszyklus. Ein zusätzlicher Vergleichspfad kann nach
+Artefakt-/Laufzeitfreigabe lokale Qwen3-/E5-/BGE-M3-Encoder hinzunehmen. Er verbindet
+Fundstellen mit RRF, ohne den bestehenden Standardretriever oder fachliche Urteile
+automatisch zu ersetzen. [Konfiguration, Limits und offene Nachweise](../research/parallel_scientific_checks.md).

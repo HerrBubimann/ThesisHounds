@@ -60,6 +60,7 @@ private/
 .venv/
 venv/
 env/
+node_modules/
 
 # ---------------------------------------------------------------------------
 # Python bytecode, build & packaging artefacts

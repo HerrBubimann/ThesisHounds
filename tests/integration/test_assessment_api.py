@@ -23,9 +23,13 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         TestClient(application) as client,
     ):
         assert len(client.get(BASE + "/profiles").json()) == 3
-        response = client.post(BASE, json={"work_type": "PA1", "profile_id": "ba-example"})
+        response = client.post(
+            BASE, json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "ba-example"}
+        )
         assert response.status_code == 422
-        record = client.post(BASE, json={"work_type": "PA1", "profile_id": "pa1-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "PA1", "profile_confirmed": True, "profile_id": "pa1-example"}
+        ).json()
         path, key = BASE + "/" + record["id"], record["id"]
         assert client.get(path + "/document").json()["classification"] == "PUBLIC"
         for suffix in ["/comparison", "/draft"]:
@@ -49,6 +53,7 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         client.portal.call(wait)
         assert client.post(path + "/ai-review").status_code == 409
         assert client.get(path).json()["ai_state"] == "COMPLETED"
+        assert "combined_result" not in client.get(path).json()
         # Sweep every old generic list/status/output route for a disclosure bypass.
         for route in [path, "/api/v1/runs", "/api/v1/agents", "/api/v1/system/resources"]:
             content = client.get(route).text
@@ -73,6 +78,13 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         assert client.get(path + "/comparison").status_code == 409
         assert client.post(path + "/release", json={"confirmed": True}).status_code == 200
         before = client.get(path + "/comparison").json()
+        combined = before["combined_result"]
+        assert combined["status"] == "HUMAN_REVIEW_REQUIRED"
+        assert combined["execution_complete"] is True
+        assert not combined["automatic_grade_effect"]
+        assert combined["analysis_id"] == key
+        assert before["retrieval_comparison"]["fts_index_builds"] == 1
+        assert len(combined["checks"]) == 6
         assert all(row["status"] == "AGREEMENT" for row in before["criteria"])
         assert client.post(path + "/human-review", json=human).status_code == 409
         assert client.get(path + "/draft").status_code == 409
@@ -124,7 +136,9 @@ def test_invalid_model_output_fails_closed(tmp_path):
         patch("app.main.create_provider", return_value=AssessmentProvider(fail=True)),
         TestClient(app) as client,
     ):
-        record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "BA", "profile_confirmed": True, "profile_id": "ba-example"}
+        ).json()
         key, path = record["id"], BASE + "/" + record["id"]
         assert client.post(path + "/ai-review").status_code == 202
 
@@ -146,7 +160,9 @@ def test_cancellation_and_shared_active_run_limit(tmp_path):
         patch("app.main.create_provider", return_value=AssessmentProvider(delay=30)),
         TestClient(app) as client,
     ):
-        record = client.post(BASE, json={"work_type": "BA", "profile_id": "ba-example"}).json()
+        record = client.post(
+            BASE, json={"work_type": "BA", "profile_confirmed": True, "profile_id": "ba-example"}
+        ).json()
         path = BASE + "/" + record["id"]
         assert client.post(path + "/ai-review").status_code == 202
         assert client.post("/api/v1/runs", json=RunRequest().model_dump()).status_code == 429

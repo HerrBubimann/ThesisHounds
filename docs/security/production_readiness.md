@@ -11,8 +11,9 @@ Das Sicherheits-Definition-of-Done und private Produktion bleiben offen.
 begrenzter Operator-PDF-Pfad für synthetische/geprüfte öffentliche Testdaten und
 ein kontrollierter `local_pilot`-Anschluss an den vorhandenen Ollama-Adapter.
 Realer Lauf, Modellartefakte und PA1-Experimentbestätigung fehlen weiterhin.
-Der [aktuelle Phasenbericht](../remediation/2026-11-27-remediation.md) und das
-[Prüfprotokoll](../remediation/2026-11-27-verification.md) grenzen dies ab.
+Die früher genannten Remediation-Markdown-Dateien fehlen im Checkout.
+Aktuelle Belege stehen im [Validierungsstand](../validation.md), die tatsächlich
+vorhandene Pilotanleitung im [Setup](../setup.md#kontrollierter-public-pilot).
 Die nachfolgenden Tabellen beschreiben die vorangegangene Sicherheitsbasis;
 der begrenzte PUBLIC-Worker ist keine Freigabe privater Parser oder Hochschuldaten.
 
@@ -27,8 +28,9 @@ ebenso wie PUBLIC_RESEARCH als Analysemode gesperrt. Neue Arbeitsgrundlagen:
 [Sicherheitscheckliste](security_release_checklist.md), [Rechtsprüfung](legal_requirements.md),
 [DSFA-Vorprüfung](dsfa_precheck.md) und [Hochschulfragen](../dhbw/open_questions.md).
 
-Das System ist ausschließlich eine synthetische Entwicklungsdemo. **Keine echten
-wissenschaftlichen Arbeiten eingeben, hochladen oder in Entwicklerwerkzeuge kopieren.**
+Das System ist eine Entwicklungsdemo mit synthetischen oder unabhängig geprüften,
+registrierten öffentlichen Testdaten. **Keine vertraulichen wissenschaftlichen Arbeiten
+hier eingeben, hochladen oder in Entwicklerwerkzeuge kopieren.**
 Der Defaultprovider ist ein In-Process-Mock. Ein gewöhnlicher Benutzer kann weder
 Modus, Klassifizierung, Modellendpunkt noch Netzwerkrechte über das UI ändern.
 
@@ -47,10 +49,10 @@ Datei als Infrastruktur-/Rechtsnachweis. Es gibt keinen produktiven Freigabescha
 | Nachgewiesene Default-Deny-Isolation inklusive DNS/IPv6/Hostpfaden | Konfiguration/Vorlage und CI-Probe geliefert; Zielhost nicht geprüft |
 | TLS, interne Authentifizierung und Zertifikatsbetrieb | Hochschul-Endpunktadapter nicht freigegeben; mTLS fehlt |
 | Geschützte Speicher, Schlüssel, verschlüsselte Backups | nicht auf Zielsystem nachgewiesen |
-| Isolierte sichere Dokumentenparser / Malwareprüfung / OCR | kein echter Upload-/Parserpfad vorhanden |
+| Isolierte sichere Dokumentenparser / Malwareprüfung / OCR | kontrollierter PUBLIC-PDF-Preflight/Worker implementiert; vollständige private OS-/Malware-/OCR-Abnahme fehlt |
 | Löschkonzept und Restore-/Backupabnahme | Demo-TTL/Delete implementiert; produktive Fristen und Nachweise offen |
 | Geschütztes Logging und unabhängige Auditintegrität | inhaltsarme lokale Audits; manipulationsgeschützter Betrieb offen |
-| Datenschutz-/Sicherheitstests | siehe tatsächliche Ergebnisse in privacy_test_results.md |
+| Datenschutz-/Sicherheitstests | aktuelle lokale Nachweise in [validation.md](../validation.md); historische Privacychecks separat |
 | Dokumentierte Restrisiken und benannte Verantwortliche | Vorschlag vorhanden; keine Risikoannahme erklärt |
 | DSGVO, DSFA, Sperrvermerke, Hochschul-/Prüfungsrecht und KI-Verordnung | zuständige Prüfung und Freigabe offen |
 

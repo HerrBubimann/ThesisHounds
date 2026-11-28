@@ -1,6 +1,6 @@
 """Privacy-first routing. Manual assignments are never presented as measured ability."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,6 +36,9 @@ class CapabilityRecord(BaseModel):
     measured_at: str = Field(min_length=1)
     mocked: bool = True
     scores: dict[TaskType, float] = Field(default_factory=dict)
+    infrastructure: dict[str, Annotated[float, Field(ge=0, allow_inf_nan=False)] | None] = Field(
+        default_factory=dict
+    )
 
 
 class ResourceBudget(BaseModel):

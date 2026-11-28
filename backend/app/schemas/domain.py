@@ -17,6 +17,29 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CompactSchemaModel(StrictModel):
+    """Omit display/default annotations, preserving all LLM validation constraints."""
+
+    @classmethod
+    def model_json_schema(cls, *args, **kwargs):
+        schema = super().model_json_schema(*args, **kwargs)
+
+        def strip_titles(value):
+            if isinstance(value, dict):
+                return {
+                    k: {name: strip_titles(child) for name, child in v.items()}
+                    if k in {"properties", "$defs"}
+                    else strip_titles(v)
+                    for k, v in value.items()
+                    if k not in {"title", "default"}
+                }
+            if isinstance(value, list):
+                return [strip_titles(v) for v in value]
+            return value
+
+        return strip_titles(schema)
+
+
 Category = Literal["content", "methodology", "formal"]
 
 

@@ -19,6 +19,9 @@ class Criterion(StrictModel):
     max_points: float | None = Field(default=None, gt=0, le=100)
     required: bool = True
     source: str = Field(min_length=1, max_length=300)
+    local_checks: list[Literal["language", "citation_style", "reproducibility"]] = Field(
+        default_factory=list, max_length=3
+    )
 
 
 class AssessmentProfile(StrictModel):

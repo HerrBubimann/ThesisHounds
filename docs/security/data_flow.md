@@ -1,6 +1,6 @@
 # Data flow and lifecycle
 
-Ergänzung 27.11.2026: [Recherche-/Knowledge-Base-Datenfluss](../research/research_privacy.md).
+Stand 28.11.2026. Ergänzende Grundlage: [Recherche-/Knowledge-Base-Datenfluss](../research/research_privacy.md).
 Geprüfte öffentliche Dateien/Metadaten können offline in getrennte lokale Bibliotheken
 importiert werden. Kein vertraulicher Rückfluss zur öffentlichen Beschaffung.
 Formalien-/Quellenresultate bleiben bis nach der unabhängigen Erstbewertung gesperrt;
@@ -13,7 +13,7 @@ flowchart LR
     Git[Source and locked dependencies] --> CI[Tests and DLP gate]
   end
   subgraph Private[Private processing boundary - DEVELOPMENT]
-    Fixture[Server owned PUBLIC synthetic document] --> Store[UUID document store outside repository]
+    Fixture[Approved PUBLIC fixture or registered public pilot] --> Store[Scoped document store outside repository]
     Store --> Context[Scoped local chunks and feature embeddings - RAM only]
     Context --> Agents[Scoped agents / fixed workflow]
     Agents --> Policy[Policy / classification / budgets]
@@ -25,7 +25,7 @@ flowchart LR
     Store --> Delete[TTL / explicit deletion / orphan sweep]
     Review --> Delete
     Policy --> Audit[Local technical metadata audit]
-    Policy -. controlled synthetic tests only .-> Pinned[Pinned local Ollama adapter]
+    Policy -. approved PUBLIC pilot only .-> Pinned[Pinned local Ollama adapter]
   end
   Browser[Demo browser] --> API[API authorization and no-store]
   API --> Review
@@ -41,19 +41,20 @@ flowchart LR
 Keine Kante vom vertraulichen Bestand zur Recherche. Kein externer Modelladapter,
 Embedding-/OCR-API oder automatischer Download existiert im Runtimepfad.
 `ResearchGateway` lehnt selbst angeblich PUBLIC deklarierte Anfragen ab.
-Öffentliche Ergebnisse dürfen künftig nach Herkunftsprüfung in die private Zone
-importiert werden; vertrauliche Fragestellungen dürfen daraus nicht hinausfließen.
+Unabhängig geprüfte öffentliche Teilbestände können bereits offline importiert werden.
+Der getrennte öffentliche Sync akzeptiert nur feste Datensatz-IDs, keinen vertraulichen
+Suchtext. Vertrauliche Fragestellungen dürfen daraus nicht hinausfließen.
 
 | Schritt | Tatsächlicher Datenort / Metadaten |
 |---|---|
-| Eingabe | Keine echten Uploads. Chat nur festes Testsignal; Aufgaben/Kriterien nur serverseitige Defaults. Freie menschliche Demoannotation bleibt im privaten Prozess. |
+| Eingabe | Keine privaten Uploads; kontrolliert registrierte PUBLIC-Pilotdateien neben der synthetischen Fixture. Chat nur festes Testsignal; Aufgaben/Kriterien nur serverseitige Defaults. Freie menschliche Demoannotation bleibt im privaten Prozess. |
 | Klassifizierung | Document default RESTRICTED, Fixture explizit PUBLIC; Sperrvermerk lokal. |
 | Speicherung | Legacy-Fixture als UUID-JSON außerhalb des Repositorys; Assessment einschließlich Gutachten, Chat und Erstbewertung nur RAM. |
 | Verarbeitung | Modell-/Agentenkontext durch serverseitige Label und erlaubte Dokumente begrenzt. Unabhängiger Review erhält keine menschliche Erstbewertung. |
-| Weiterleitung | Default: keine Netzwerk-Inferenz. Kontrollierte Ollama-Tests über Gateway; niemals externe Provider. |
-| Zwischenspeicherung | Begrenzte Run-/Assessment-/Agentenzahl; keine Vektordatenbank oder externe Caches. |
+| Weiterleitung | Default: keine Netzwerk-Inferenz. Optionaler freigegebener lokaler PUBLIC-Pilot über denselben Gateway; niemals externe Provider. |
+| Zwischenspeicherung | Begrenzte Run-/Assessment-/Agentenzahl; fallbezogener flüchtiger UI-Entwurf, kein Browser-localStorage und kein externer Cache. Öffentliche SQLite-/FTS5-Snapshots sind separate kuratierte Referenzen. |
 | Bibliografie/DOI | Kandidaten, Nennungen und Einträge behalten Klasse und Analyse-/Dokument-ID; Zusammenführung nutzt höchste Klasse. Quellenreview verweigert fremden Scope. |
-| Ausgabe | Zuweisung und Rechte sowie Ergebnisembargo; Modelltext als Text, menschliche Finalisierung, höchste Schutzklasse. Keine Export-/Downloadroute freigegeben. |
+| Ausgabe | Zuweisung und Rechte sowie Ergebnisembargo; Modelltext als Text, menschliche Finalisierung, höchste Schutzklasse. Expliziter TXT-/Markdown-Download des autorisierten menschlichen Entwurfs; geschützte PUBLIC-Original-PDF-Ansicht. Keine automatische Übermittlung. |
 | Protokollierung | Technische Auditmetadaten, keine Inhalte; Metriken, Laufzeiten und Tokenzähler. |
 | Löschung | TTL, Shutdown, UUID-Orphan-Sweep, DELETE für Runs/Assessments. Host-Backups/Swap/Browser liegen außerhalb dieser Löschgarantie. |
 

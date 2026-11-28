@@ -211,7 +211,7 @@ def test_provenance_limits_and_no_unsupported_or_paid_fallback():
     for provider, data, error in [
         ("unknown", b"{}", "DENIED"),
         ("crossref", b"x" * 8_000_001, "DENIED"),
-        ("datacite", b"{}", "NOT_RELEASED"),
+        ("semantic_scholar", b"{}", "NOT_RELEASED"),
     ]:
         with pytest.raises(ValueError, match=error):
             import_metadata(data, provider, public_provenance_checked=True, **kwargs)

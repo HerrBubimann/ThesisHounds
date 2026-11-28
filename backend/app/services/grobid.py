@@ -70,12 +70,38 @@ def parse_tei(data: bytes) -> dict:
         {"text": "".join(r.itertext()), "target": r.attrib.get("target"), "mapping_verified": False}
         for r in root.findall(".//t:ref[@type='bibr']", ns)
     ]
+    objects = []
+    for element in root.iter():
+        kind = element.tag.rsplit("}", 1)[-1]
+        if kind not in {"figure", "formula"}:
+            continue
+        if len(objects) >= 500:
+            raise ValueError("PARSER_OBJECT_LIMIT")
+        objects.append(
+            {
+                "id": element.attrib.get("{http://www.w3.org/XML/1998/namespace}id"),
+                "kind": "FORMULA"
+                if kind == "formula"
+                else "TABLE"
+                if element.attrib.get("type") == "table"
+                else "FIGURE",
+                "text": " ".join(element.itertext())[:64000],
+                "coordinates": element.attrib.get("coords"),
+                "rows": [
+                    [" ".join(cell.itertext())[:2000] for cell in row.findall("t:cell", ns)[:50]]
+                    for row in element.findall(".//t:row", ns)[:200]
+                ],
+                "extraction_verified": False,
+                "mapping_verified": False,
+            }
+        )
     return {
         "method": "local-grobid-tei",
         "references": entries,
         "citations": citations,
         "semantic_support": "MANUAL_REVIEW_REQUIRED",
         "external_consolidation": False,
+        "objects": objects,
     }
 
 

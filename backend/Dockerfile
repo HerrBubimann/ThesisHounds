@@ -24,7 +24,8 @@ RUN apt-get update \
     && pip install --no-cache-dir --require-hashes -r requirements.lock \
     && python -m pip uninstall --yes pip \
     && groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --create-home app
+    && useradd --uid 10001 --gid app --create-home app \
+    && install -d -m 0700 -o 10001 -g 10001 /public-staging
 COPY --chown=10001:10001 backend/app /app/app
 COPY --chown=10001:10001 config /app/config
 USER 10001:10001

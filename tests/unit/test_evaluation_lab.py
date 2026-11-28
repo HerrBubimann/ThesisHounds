@@ -1,13 +1,20 @@
 import asyncio
 import csv
 import json
+from typing import get_args
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from app.assessments.profile_registry import ProfileRegistry
 from app.assessments.schemas import AssessmentFinding
 from app.core.configuration import RuntimeConfig
-from app.evaluation.lab import ExperimentRequest, condition, export_results, run_experiment
+from app.evaluation.lab import (
+    ExperimentRequest,
+    Variation,
+    condition,
+    export_results,
+    run_experiment,
+)
 from app.evaluation.metrics import HumanReferenceSet, digest, fingerprint, quality_metrics
 from app.llm.gateway import LLMGateway
 from app.llm.providers.demo import DemoProvider
@@ -46,6 +53,35 @@ def test_global_call_limit_stops_experiments_without_external_fallback():
     )
     assert report["total_model_calls"] == 1 and not report["complete"]
     assert report["consistency"][0]["status"] == "NEEDS_REPEATS"
+
+
+@pytest.mark.parametrize(
+    "matrix_request",
+    [
+        ExperimentRequest(variations=list(get_args(Variation)), repeats=1),
+        ExperimentRequest(
+            ablations=["baseline", "no_retrieval", "no_dynamic", "no_verification"], repeats=1
+        ),
+    ],
+    ids=["ci-all-variations", "ci-all-ablations"],
+)
+def test_complete_ci_experiment_matrices_fit_existing_limits(matrix_request):
+    gateway, config = lab()
+    model_limits = {m.id: m.context_length for m in config.models.enabled()}
+    with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as network:
+        report = asyncio.run(run_experiment(gateway, config, matrix_request))
+        network.assert_not_called()
+    assert len(report["results"]) == (
+        5 * len(matrix_request.variations) * len(matrix_request.ablations)
+    )
+    assert report["complete"], [
+        (row["architecture"], row["variation"], row["ablation"], row.get("error_code"))
+        for row in report["results"]
+        if row["status"] != "COMPLETED"
+    ]
+    assert all(row["coverage_complete"] for row in report["results"])
+    assert report["total_model_calls"] <= matrix_request.max_total_model_calls
+    assert {m.id: m.context_length for m in config.models.enabled()} == model_limits
 
 
 def test_architecture_e_cannot_silently_disable_its_verification_component():

@@ -1,6 +1,69 @@
 # Requirements traceability and engineering gap analysis
 
-## Document Security, 27.11.2026 – aktueller Arbeitsstand
+Stand des Codeabgleichs: 28.11.2026. Die historischen Tabellen bleiben mit ihren
+damaligen Testzahlen erhalten. Aktuelle Gesamtvalidierung: [validation.md](../validation.md).
+Keine primäre Aufgabenfolie, amtliche Katalogfreigabe oder Expertenstudie wird
+durch die rekonstruierten OFF-/G-Zuordnungen ersetzt.
+
+## Aktuelle Implementierung und Nachweisgrenzen
+
+| Bereich | Implementierter Stand | Noch offen |
+|---|---|---|
+| OFF-1 | Beispiel-/Kandidatenkataloge, Quellen-/Kohortenbindung und dokumentierter Prozess | genehmigter Detailkatalog und primäres Professorenfeedback |
+| OFF-2/3 | gemeinsames Gateway, Pflichtcoverage, semantische Spezialisten, sechs begrenzte parallele Prüfpfade | echte Modellfreigaben/-qualität und private Host-/Parserabnahme |
+| OFF-3/4 | Originalbelege, Zahlen-/Methodenhinweise, Dublettenvorschläge, Quelleninspektor und Notizen | fachliche Validierung, verlässliche visuelle Extraktion |
+| OFF-4 | Anlageassistent, unabhängige Erstbewertung, neutrales Vergleichs-UI, menschliche Kriterienentscheidung/Finale, lokaler TXT-/Markdown-Export | autorisierte RESTRICTED-KI-Diskussion, dauerhafte Akte/SSO, PDF-/DOCX-Gutachtenexport |
+| OFF-5 | A–E-CLI-Lab, Benchmark v3, Referenzschnittstellen; 940 Tests/87,05 %, lokale App-Builds/Mock-E2E/Scanner | echte Inferenz-/Experten-/Nutzenstudie, vollständiger Remote-CI-/Zielhostnachweis |
+
+## Frontend und Gutachterwerkzeuge 28.11.2026
+
+OFF-2/3/5 und ENG-6/7/8/10: Der bestehende unabhängige Assessmentpfad wurde um
+methodenbezogene Reproduzierbarkeitsfragen, begrenzte numerische Prüfungen,
+beleggebundene Dublettenvorschläge, versionierte Notizen und Rückfragen ergänzt.
+[Prüfumfang und Betrieb](../research/reviewer_productivity_tools_2026-11-28.md),
+[geprüfter Zwischenstand](../evaluation/reviewer_productivity_results.md).
+
+Die neue Oberfläche erschließt diese vorhandenen Funktionen über Dashboard,
+geführte Anlage, Kriterien-/Dokument-/Befundansicht und getrennte technische Zentren.
+[Frontendaudit und Architekturentscheidung](../frontend/architecture.md),
+[API-Verträge und Zugriffsschutz](../frontend/api_integration.md),
+[Tests und tatsächliche Grenzen](../frontend/limitations.md).
+Der Umbau ersetzt keine fehlenden Modell-/Hochschulfreigaben und erhebt keine
+Modellqualität aus Mock-Tests. Das vorhandene CI-Gate und seine Schwellen bleiben bestehen.
+
+## Parallele wissenschaftliche Prüfungen 28.11.2026
+
+OFF-2/3/5 und ENG-6/7/8/10: Der vorhandene Assessmentpfad führt unabhängige
+Prüfungen unter gemeinsamen Ressourcenlimits zusammen. Ergebnisansicht,
+Provenienz und menschlicher Gutachtenentwurf teilen einen gemeinsamen Prüfbericht.
+FTS-Wiederverwendung, lokale Embedding-Kandidaten, citeproc-Opt-in und DBLP-Release-
+Auswahl sind in [Betrieb und Grenzen](../research/parallel_scientific_checks.md)
+und [tatsächlichen Prüfergebnissen](../evaluation/parallel_review_results.md) zugeordnet.
+Die Einordnung übernimmt die bestehenden Projektanforderungen; sie ersetzt keinen
+fehlenden offiziellen Katalog oder eine fachliche/organisatorische Freigabe.
+
+## Lokale wissenschaftliche Daten und Werkzeuge 27.11.2026
+
+[Implementierung und tatsächliche Prüfungen](../evaluation/public_research_results.md):
+DBLP-Streamingimport, SQLite/FTS5-Versionen und Merge/Rollback, konservative
+Mehrquellen-/ISBN-Prüfung, optionales lokales LanguageTool und Retrievalmessung
+erweitern OFF-2/3/5. Öffentliche Datensynchronisierung hat eine separate,
+statisch geprüfte Umgebung; die private Research-Gateway-Sperre bleibt bestehen.
+Kein neuer verbindlicher Mosbach-Zitierstil, kein aktiviertes Embeddingmodell und
+keine behauptete erfolgreiche reale LLM-/Daten-/Werkzeugabnahme.
+
+## Wissenschaftliche Qualitätserweiterung 27.11.2026
+
+[Implementierung, Tests und verbleibende Abnahmen](../evaluation/scientific_reasoning_results.md)
+ergänzen die vorhandene OFF-Zuordnung: strukturierte wissenschaftliche Claims und
+Graphkandidaten (OFF-3/5), methodenbezogene Planung und Herkunft (OFF-2/3), begrenzte
+Gegenprüfung und menschliches Feedback (OFF-1/3/4) sowie deterministische Abdeckung
+und kontrollierte Evaluation (OFF-2/3/5). Technische Implementierung mit synthetischen
+Regressionen ist von echter Modellinferenz und fachlichem Qualitätsnachweis getrennt.
+Der lokale LLM/PDF-Gesamtlauf bleibt infrastrukturell offen; keine neue offizielle
+DHBW-Anforderung oder Freigabe wird aus diesen Erweiterungen abgeleitet.
+
+## Document Security: historischer Arbeitsstand vom 27.11.2026
 
 Die OFF-1–5-Zuordnung ist aus vorhandener Dokumentation rekonstruiert, keine
 erneute Prüfung der fehlenden Original-PowerPoint/Professorenfreigabe. Historisch
@@ -51,11 +114,11 @@ Frühere Tabellen/Testzahlen sind historische Stände der dort verlinkten Erweit
 
 ## Post-Audit Remediation, 27.11.2026
 
-Maßgeblicher neuer Arbeitsstand: [Phasenbericht und Abnahmegrenzen](../remediation/2026-11-27-remediation.md),
-[alle G01–G30 mit Abnahmekriterien](../remediation/2026-11-27-backlog.md),
-[tatsächlich ausgeführte Prüfungen](../remediation/2026-11-27-verification.md) und
-[Pilotanleitung](../remediation/2026-11-27-pilot-runbook.md).
-Die fünf Auditdateien bleiben historische Ausgangsbelege. Die folgenden Abschnitte
+Die früher genannten Phasen-/Backlog-/Prüf-/Pilotdateien unter `docs/remediation/`
+sowie die fünf ursprünglichen Auditdateien fehlen im Checkout und sind keine
+prüfbaren aktuellen Belege. Die folgende Tabelle bewahrt die damalige G-Zuordnung.
+Aktuelle Anleitung: [kontrollierter PUBLIC-Pilot](../setup.md#kontrollierter-public-pilot);
+aktuelle Nachweise: [Validierung](../validation.md). Die folgenden Abschnitte
 zu früheren Erweiterungen sind weiterhin deren jeweilige historische Nachweise.
 Die originale DHBW-Projekt-PowerPoint und primäres Professorenfeedback fehlen;
 OFF-1 bis OFF-5 bleiben rekonstruierte Anforderungen. Der Nutzer bestätigt weiterhin
@@ -71,7 +134,7 @@ fehlenden PA1-Experimentkatalog und fehlende freigegebene Modellartefakte.
 | OFF-3/5 / G16 | Eine DOI-Normalisierung; mehrdeutige legitime Suffixzeichen bleiben | `backend/app/research/doi.py`, `backend/app/research/provider_registry.py`, `backend/app/research/local_verification.py`, `backend/app/assessments/routine_checks.py` | `tests/unit/test_audit_regressions.py::test_g16_one_canonical_doi_function_preserves_ambiguous_suffixes`, Retraction-Semikolonfall | rot vor Korrektur, grün final; IMPLEMENTED_AND_TESTED für geprüfte Eingaben |
 | OFF-3/4/5 / G17 | Fehlendes optionales KI-Kriterium ohne KeyError, getrennte Bearbeitungszustände, Pflichtgate bleibt | `backend/app/assessments/coverage.py`, `backend/app/workflows/assessment_workflow.py`, `frontend/assessment_review.py` | `tests/unit/test_audit_regressions.py::test_g17_missing_optional_finding_can_be_compared_and_finalized`, `test_g17_execution_states_and_required_coverage_are_distinct` | `g17-before.xml` reproduziert KeyError, final grün; IMPLEMENTED_AND_TESTED |
 | OFF-4 / G03,G10 | Pilotdateiauswahl, unabhängiger Humanreview, Embargo, Belege, manuelle Klärung und Finale | `frontend/assessment_review.py`, `backend/app/workflows/assessment_workflow.py` | `tests/integration/test_pilot_workflow.py::test_pilot_pdf_can_be_selected_in_ui_with_explicit_inference_mode`, kompletter PDF-/Adaptertest, bestehende `tests/integration/test_assessment_frontend.py` | `ui-pilot.xml`, `junit-final.xml`; IMPLEMENTED_AND_TESTED mit synthetischen Daten/Mockantworten, freie KI-Diskussion bleibt gesperrt |
-| OFF-2/4/5 / G06,G22 | Dokument-/Text-/Kriterien-/Architekturbindung und expliziter flüchtiger Ergebnisvertrag | `backend/app/assessments/provenance.py`, `backend/app/workflows/assessment_workflow.py`, `docs/remediation/2026-11-27-pilot-runbook.md` | `tests/integration/test_pilot_workflow.py::test_pilot_abort_delete_and_restart_explicitly_have_no_recovery`, `tests/integration/test_finding_feedback.py` | `junit-final.xml`; Lifecycle/Verlust beim Neustart IMPLEMENTED_AND_TESTED, Persistenz/Restore/integrer Akteuraudit NOT_IMPLEMENTED |
+| OFF-2/4/5 / G06,G22 | Dokument-/Text-/Kriterien-/Architekturbindung und expliziter flüchtiger Ergebnisvertrag | `backend/app/assessments/provenance.py`, `backend/app/workflows/assessment_workflow.py`, `docs/setup.md` (aktuelle Pilotanleitung; historischer Remediation-Text fehlt) | `tests/integration/test_pilot_workflow.py::test_pilot_abort_delete_and_restart_explicitly_have_no_recovery`, `tests/integration/test_finding_feedback.py` | `junit-final.xml`; Lifecycle/Verlust beim Neustart IMPLEMENTED_AND_TESTED, Persistenz/Restore/integrer Akteuraudit NOT_IMPLEMENTED |
 | OFF-3/5 / G07,G26,G27 | Fünf analysierbare PDFs plus geheime Deny-Kontrolle; gleicher A/E-Input; dokumentweise Konsistenz und Referenzzuordnung | `backend/app/evaluation/academic_benchmark.py`, `backend/app/evaluation/lab.py`, `backend/app/evaluation/metrics.py` | `tests/integration/test_pilot_evaluation.py::test_generated_pdf_corpus_runs_a_and_e_without_cross_document_repeat_comparisons`, unregistrierter Korpus wird abgewiesen | 20 Mock-Reviews im Integrationstest; IMPLEMENTED_AND_TESTED für Software; Referenzgüte BLOCKED_BY_EXTERNAL_REQUIREMENTS |
 | OFF-2/5 / G09,G20,G23,G24 | Bestehende Prüfgrenzen und Tests erhalten; neue Positiv-/Negativfälle | `pyproject.toml`, `.github/workflows/ci.yml` (beide unverändert), neue Pilot-/Auditregressionen | gesamtes `tests/` | 672 Fälle, 87,30 %, Ruff/Bandit/pip-audit/statische Compose-Prüfung; lokale Softwarechecks IMPLEMENTED_AND_TESTED, neue Docker-/Remote-/Hardwareabnahme IMPLEMENTED_NOT_VERIFIED |
 
@@ -178,7 +241,7 @@ die vorhandenen Rechte-/Budgetprüfungen und den unabhängigen menschlichen Revi
 
 | Paket | Tatsächlich implementierte Komponenten | Zugehörige neue Tests | Status / verbleibender wissenschaftlicher Nachweis |
 |---|---|---|---|
-| ENG-1 | model_router.py, Gateway.route, Capability-Probes v2, leere Capability-Registry | test_model_routing.py; bestehende Gatewaytests | technische Auswahl implementiert; echte Qualitätsscores fehlen, manueller Fallback sichtbar |
+| ENG-1 | model_router.py, Gateway.route, Capability-Probes v3, leere Capability-Registry | test_model_routing.py; bestehende Gatewaytests | technische Auswahl implementiert; echte Qualitätsscores fehlen, manueller Fallback sichtbar |
 | ENG-2 | assessments/coverage.py im verbindlichen Criterion Loop | test_scientific_evidence.py, Assessment-API | Abdeckung im Beispielkatalog geprüft; offizieller Detailkatalog fehlt |
 | ENG-3 | adaptive_assessment.py mit vorhandener Factory/Registry/ExecutionEngine | A-E-Lab-/Factory-/Securitytests | begrenzte Zusatzagenten implementiert; fachlicher Mehrwert ungemessen |
 | ENG-4 | adversarial_verification.py, geteilte deterministische Evidenzfunktion | test_adversarial_verification.py, test_scientific_boundaries.py | Gegenprüfung und unverlöschte Konflikte implementiert; keine garantierte semantische Wahrheit |
@@ -190,6 +253,7 @@ die vorhandenen Rechte-/Budgetprüfungen und den unabhängigen menschlichen Revi
 | ENG-10 | bestehende Privacy-Grenzen auch in Router, Verifier und Evidence-API | gesamte Security-Suite, scientific_boundaries | keine neue Freigabe echter Arbeiten; Zielhost-/SSO-/Organisationsnachweise weiterhin erforderlich |
 
 Aktuelle Testzahlen und tatsächlich beobachtete Ergebnisse stehen in
-`../evaluation/results.md`. Die formale Projektaufgabe ist damit technisch deutlich
+[validation.md](../validation.md). Der 448-Test-Stand unter
+[historischen Ergebnissen](../evaluation/results.md) bleibt ein früherer Checkpoint. Die formale Projektaufgabe ist damit technisch deutlich
 weiter abgedeckt; ein **nachgewiesener wissenschaftlicher Qualitätsgewinn** ist
 ohne reale lokale Modellmessungen, Expertenreferenzen und passende Studie noch offen.

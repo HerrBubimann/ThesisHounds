@@ -1,5 +1,9 @@
 # Semantische adaptive Planung Prüfstand vom 27. November 2026
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 Die [semantische Zusatzplanung](../architecture/semantic_adaptive_planning.md)
 ist im bestehenden Assessment-, Factory-, Router- und Labpfad integriert.
 **Geprüft ist die Software mit kontrollierten Modellantworten, nicht die fachliche

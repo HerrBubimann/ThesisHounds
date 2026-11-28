@@ -22,6 +22,15 @@ async def model_status(runtime: RuntimeDependency) -> dict:
     return {"models": await runtime.model_status()}
 
 
+@router.get("/models/capabilities")
+async def model_capabilities(runtime: RuntimeDependency) -> dict:
+    return {
+        "records": runtime.config.capabilities,
+        "configuration_is_approval": False,
+        "mocked": runtime.mocked,
+    }
+
+
 @router.get("/agents")
 async def agents(runtime: RuntimeDependency) -> dict:
     runtime.cleanup()

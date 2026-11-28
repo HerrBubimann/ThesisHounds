@@ -9,9 +9,11 @@ wird daraus abgeleitet. Ergebnisse: [Mosbach-Nachweise](mosbach_results.md).
 Beitrag: OFF-2/5, ENG-10. Die bisherige Privacy-Architektur bleibt verbindlich.
 Neue Modellaufrufe laufen ausschließlich durch denselben Gateway und die gleiche
 Policy; RESTRICTED/CONFIDENTIAL/INTERNAL bleiben in DEVELOPMENT gesperrt. Das Lab
-verarbeitet nur servergenerierte PUBLIC-Fixtures und akzeptiert keine Dokumentpfade
-oder freie Dokumenttexte. JSON-/CSV-Exporte sind lokale synthetische Forschungsartefakte,
-keine neue Exportfreigabe für Gutachten oder menschliche Bewertungen.
+verarbeitet standardmäßig servergenerierte PUBLIC-Fixtures; der kontrollierte Pilot
+akzeptiert zusätzlich ausschließlich registrierte unabhängig geprüfte öffentliche
+Testdokument-IDs, keine freien Dokumentpfade oder Texte. JSON-/CSV-Lab-Exporte sind
+Forschungsartefakte und keine pauschale Exportfreigabe privater Daten. Der separate
+UI-Gutachtenexport benötigt die autorisierte menschliche Entscheidung/Freigabe.
 
 Zusätzliche Tests prüfen Policy-Vorrang vor Capability-Scores, exakte Digestbindung,
 Ressourcenlimits, unabhängige Reviewerwahl, erhaltene Datenklasse beim Review eines
@@ -26,7 +28,7 @@ und das verpflichtende `privacy-security`/`thesishounds-ci-gate` bleiben bestehe
 Neue Unit-/Integrations-/Securitydateien werden durch die vorhandenen Testpfade
 automatisch Teil des Gates; schwere echte Modellbenchmarks sind kein CI-Job.
 
-Die bereits gelieferte Docker-Listenerprobe wird erneut auf dem lokalen synthetischen
+Die bereits gelieferte Docker-Listenerprobe wird separat auf dem lokalen synthetischen
 Stack ausgeführt. Dieser Nachweis ersetzt weiterhin weder Hochschulnetz-/SSO-/
 Speicherabnahme noch Angriffe auf echte PDF-/OCR-Schichten. Der Text-Injectiontest
 prüft keine unsichtbaren PDF-Fontangriffe; solche Angriffe bleiben Parser-/Studienarbeit.

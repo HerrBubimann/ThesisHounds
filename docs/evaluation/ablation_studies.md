@@ -32,3 +32,18 @@ Precision/Recall, falsche Kritik und Halluzinationsrate bleiben ohne dokumenten-
 kataloggebundene menschliche Adjudikation `null`. Weniger Calls oder mehr Modelle
 beweisen keinen Qualitätsvorteil. Die HumanReferenceSet-Schnittstelle ist vorhanden;
 es wurden keine menschlich geprüften Referenzbefunde erfunden.
+
+Wissenschaftliche Erweiterung vom 27.11.2026: Paare mit abweichenden Dokument-
+oder Kataloghashes werden verworfen, auch bei identischer Dokument-ID. Zusätzliche
+optionale menschliche Adjudikationen erfassen Aussagekorrektheit, methodische
+Schwächenerkennung, Fehlerfortpflanzung und Gutachterakzeptanz. Raten verwenden nur
+tatsächlich vorhandene Annotationen und nennen deren Anzahl. Fehlende Annotationen
+und menschliche Zeitersparnis bleiben `null`. Fingerprints binden nun auch Claims,
+Beziehungen und unterstützende Belegstellen (`scientific-evidence.v2`); alte Labels
+werden bei abweichenden Fingerprints nicht automatisch übernommen.
+
+Die bestehende Einzelkomponentenablation isoliert Retrieval, adaptive Spezialisten
+und Gegenprüfung. Eine separate Ablation ausschließlich der neuen Claimextraktion
+oder Graphrepräsentation ist noch nicht implementiert. Der technische Mocklauf
+ist im [aktuellen Prüfbericht](scientific_reasoning_results.md) dokumentiert und
+ersetzt keine Expertenstudie oder echte Modellinferenz.

@@ -19,7 +19,10 @@
 
 Executable cases: `tests/integration/test_assessment_api.py`,
 `tests/security/test_assessment_boundaries.py`, `tests/unit/test_assessment_components.py`
-and the baseline agent/security suites. The runnable model probe has four prompt
-cases in `backend/app/evaluation/model_benchmark.py`. Planned cases above are not
-claimed to be fully implemented or evaluated. PDF white text, hidden layers, DOCX
-metadata and provider attacks require additional parsers/adapters and fixtures.
+and the baseline agent/security suites. The current model probe has eleven task
+dimensions in `backend/app/evaluation/model_benchmark.py`. These case families do
+not imply completed human validation. Synthetic PDF white-text/hidden-content and
+metadata indicators are already covered by the controlled worker/security fixtures;
+complete raster/OCR/image resistance and real provider/model attack studies remain open.
+New UI/read-API cases cover the creation wizard, saved session drafts, original-PDF
+integrity, ACL-filtered listings, evidence navigation and offline source snapshots.

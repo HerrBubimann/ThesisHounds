@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     enable_public_research: bool = False
     enable_internal_research: bool = False
     enable_ai_scoring: bool = False
+    enable_local_language_tool: bool = False
     max_concurrent_model_requests: int = Field(default=1, ge=1, le=4)
     llm_model: str = Field(
         default="qwen3:8b",
@@ -50,6 +51,8 @@ class Settings(BaseSettings):
     config_dir: Path = Path(__file__).resolve().parents[2] / "config"
     document_store_dir: Path = Path(tempfile.gettempdir()) / "thesishounds-demo" / "documents"
     public_metadata_dir: Path | None = None
+    local_embedding_manifest_dir: Path | None = None
+    citation_style_dir: Path | None = None
 
     @field_validator("llm_model")
     @classmethod
@@ -93,6 +96,11 @@ class Settings(BaseSettings):
             source_root
         ):
             raise ValueError("Metadata snapshots must be outside the source repository.")
+        for directory in (self.local_embedding_manifest_dir, self.citation_style_dir):
+            if directory and directory.resolve().is_relative_to(source_root):
+                raise ValueError(
+                    "Reviewed scientific artifacts must be outside the source repository."
+                )
         if self.pilot_document_dir and self.pilot_document_dir.resolve().is_relative_to(
             source_root
         ):

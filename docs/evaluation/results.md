@@ -1,5 +1,9 @@
 # Scientific engineering results
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 Historischer Stand dieser Engineering-Iteration. Aktuelle Ergebnisse einschließlich
 Kontextmanagement, Fairness/Ablation, Feedback und 627 Regressionen:
 [Advanced Review](advanced_review_results.md).

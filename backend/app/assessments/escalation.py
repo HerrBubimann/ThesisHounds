@@ -9,12 +9,14 @@ def plan_escalation(finding, *, complex_topic=False, resources_available=True):
     )
     deficient = finding.evidence_quality in {"INSUFFICIENT", "NOT_ASSESSABLE", "CONTRADICTORY"}
     unresolved_question = finding.kind == "OPEN_QUESTION" and finding.judgment == "MIXED"
+    scientific_concern = any(c["issues"] for c in finding.claim_checks)
     verify = (
         critical
         or deficient
         or unresolved_question
         or finding.conflict
         or bool(finding.relationships)
+        or scientific_concern
         or "SECURITY_CONTEXT_UNIFORM_POSITIVE_REQUIRES_HUMAN" in finding.open_questions
     )
     specialized = complex_topic and (
@@ -30,6 +32,7 @@ def plan_escalation(finding, *, complex_topic=False, resources_available=True):
         deficient
         or finding.claim_type == "ABSENCE"
         or finding.conflict
+        or scientific_concern
         or (verify and not resources_available)
         or any("REQUIRES_HUMAN" in q for q in finding.open_questions)
     )

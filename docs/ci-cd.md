@@ -11,6 +11,8 @@ Repository-Ruleset/Branch Protection voraus; bestehende Rulesets wurden nicht ve
 
 Die Pipeline in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) prüft jede Änderung, bevor sie in `main` gelangt. Verbindlich ist ein einziger Status Check: **`thesishounds-ci-gate`**. Er ist nur grün, wenn alle Pflicht-Jobs tatsächlich erfolgreich waren.
 
+Stand der Implementierung: 28.11.2026. Acht Pflichtjobs plus Gate; letzte vorhandene lokale Nachweise unter [validation.md](validation.md). Der Remote-Status ist nicht durch diesen Text verifiziert.
+
 ## Auslöser
 
 | Ereignis | Verhalten |
@@ -30,6 +32,7 @@ flowchart LR
     U[unit-tests]
     I[integration-tests]
     S[security]
+    P[privacy-security]
     C[coverage]
     DV[docker-validation]
     DB[docker-build]
@@ -42,6 +45,7 @@ flowchart LR
     U --> G
     I --> G
     S --> G
+    P --> G
     C --> G
     DV --> G
     DB --> G
@@ -53,8 +57,9 @@ flowchart LR
 | **unit-tests** | `tests/unit`: Model Registry, Gateway, Provider, Agent Factory/Registry, Execution Engine, Validierung, Konfiguration, CI-Gate-Logik, Workflow-Policies | fehlgeschlagenem, fehlerhaftem oder **übersprungenem** Test |
 | **integration-tests** | `tests/integration`: API, Control-API, Streamlit-Frontend ↔ Backend, vollständige LangGraph-Durchläufe A–D, Konflikte, Timeouts, Abbruch, fehlende Modelle, Compose-Netzisolation, Backend ↔ **Mock-Ollama über echtes HTTP** | wie oben |
 | **security** | `tests/security`, Bandit, pip-audit, Gitleaks | siehe [Schwellen](#sicherheitsschwellen) |
+| **privacy-security** | Gitindex-DLP, Datenschutzregressionen, Privacy-/Academic-Benchmarks und Canaryprüfung | fehlgeschlagene/fehlende/übersprungene Pflichtnachweise |
 | **coverage** | kombiniert die Coverage-Daten der drei Testjobs, XML + HTML + Terminal | Unterschreitung von `fail_under`, fehlenden Coverage-Daten |
-| **docker-validation** | `docker compose config` für CPU, GPU, Provisionierung, CI-Mock; [`validate_docker.py`](../infrastructure/scripts/validate_docker.py); `docker buildx build --check` | ungültiger Konfiguration oder Regelverstoß |
+| **docker-validation** | `docker compose config` für CPU, GPU, Provisionierung, CI-Mock, University, GROBID und öffentlichen Sync; [`validate_docker.py`](../infrastructure/scripts/validate_docker.py); `docker buildx build --check` | ungültiger Konfiguration oder Regelverstoß |
 | **docker-build** | baut Frontend, Backend und Ollama-Image, Trivy-Scan, Runtime-Smoke 1 (echtes Ollama-Image ohne Modell) und 2 (End-to-End mit Mock-LLM) | Buildfehler, Trivy-Befund über Schwelle, fehlgeschlagenem Smoke-Test |
 | **thesishounds-ci-gate** | wertet alle Jobs und Testberichte aus | siehe unten |
 
@@ -66,14 +71,14 @@ Alle LLM-Aufrufe in der CI sind Mocks. Es wird kein Modell geladen, keine GPU be
 
 - In pytest läuft er in einem Thread: `tests/integration/test_mock_ollama_http.py`.
 - In `docker-build` ersetzt [`compose.ci.yaml`](../compose.ci.yaml) den Ollama-Dienst durch den Mock. Dabei wird das Backend-Image wiederverwendet und es wird nichts gebaut.
-- [`ci_e2e.py`](../infrastructure/scripts/ci_e2e.py) prüft dann aus den Containern heraus: Frontend-Health, Frontend → Backend, Backend → Mock, Chat, einen vollständigen synthetischen Lauf im Modus D mit dynamischen Subagenten bis zur menschlichen Prüfung sowie fehlenden Internetzugang des Backends.
+- [`ci_e2e.py`](../infrastructure/scripts/ci_e2e.py) prüft dann aus den Containern heraus: Frontend-Health, Frontend → Backend, Backend → Mock, Chat, einen vollständigen synthetischen Lauf im Modus D mit dynamischen Subagenten bis zur menschlichen Prüfung sowie den kriteriumsbezogenen Assessmentablauf bis zur menschlichen Finalisierung. Die separate kontrollierte Netzprobe läuft über `network_acceptance.py`; der E2E-Test allein beweist keine vollständige Netzisolation.
 
 ## Quality Gate
 
-`thesishounds-ci-gate` hängt per `needs` von allen sieben Jobs ab und läuft mit `if: always()`. Er schlägt fehl, wenn
+`thesishounds-ci-gate` hängt per `needs` von allen acht Pflichtjobs ab und läuft mit `if: always()`. Er schlägt fehl, wenn
 
 - ein Pflicht-Job `failure`, `cancelled`, `skipped` oder kein Ergebnis hat,
-- ein Testbericht (`junit-unit.xml`, `junit-integration.xml`, `junit-security.xml`) oder `coverage.xml` fehlt,
+- ein Testbericht (`junit-unit.xml`, `junit-integration.xml`, `junit-security.xml`, `junit-privacy.xml`) oder `coverage.xml` fehlt,
 - ein Bericht 0 Tests, Fehlschläge, Fehler oder **übersprungene Tests** enthält,
 - die Liste der Pflicht-Jobs leer ist oder nicht zu `needs` passt.
 
@@ -93,14 +98,15 @@ Wer das Gate abschwächt, bricht also selbst die Tests.
 
 - Gemessen wird `backend/app`, `frontend` und `infrastructure/scripts`, mit Branch-Coverage.
 - Nicht gemessen werden nur `run_ci.py`, `ci_e2e.py` und `smoke.py`. Sie steuern ausschließlich Docker bzw. Subprozesse und laufen im `docker-build`-Job.
-- Grenzwert: **80 %** (`fail_under` in [`pyproject.toml`](../pyproject.toml)). Gemessen am 26.11.2026: **85,1 %** (Zeilen + Branches, alle Suites). Der Zielwert von 70 % aus der Aufgabenstellung ist damit überschritten. 80 % lassen Spielraum für neuen Code, ohne Rückschritte zuzulassen.
+- Grenzwert: **80 %** (`fail_under` in [`pyproject.toml`](../pyproject.toml)). Letzter vorhandener Gesamtlauf vom 28.11.2026: **87,05 %** bei 940 Tests. Historische Ausgangsmessung am 26.11.2026: 85,1 %. Der Zielwert von 70 % aus der Aufgabenstellung ist damit überschritten. 80 % lassen Spielraum für neuen Code, ohne Rückschritte zuzulassen.
 - Der Grenzwert wird nur schrittweise **erhöht**. Absenken, um eine rote Pipeline grün zu bekommen, ist unzulässig. Jede Änderung braucht einen eigenen, begründeten PR.
 
 ## Sicherheitsschwellen
 
 | Werkzeug | Umfang | Blockiert | Nur Bericht |
 | --- | --- | --- | --- |
-| Bandit 1.9.4 | `backend/app`, `frontend`, `infrastructure/scripts` | Severity ≥ MEDIUM **und** Confidence ≥ MEDIUM | LOW (aktuell 14× `subprocess` mit festen Argumentlisten in Infrastruktur-Skripten) |
+| Bandit 1.9.4 | `backend/app`, `frontend`, `infrastructure/scripts`, `infrastructure/security/scripts` | Severity ≥ MEDIUM **und** Confidence ≥ MEDIUM | LOW wird im Vollbericht zur Prüfung ausgegeben; Anzahl ist laufabhängig |
+| npm audit | gepinnter optionaler citeproc-js-Teilbaum | Advisory ab LOW bei `--omit=dev --audit-level=low` | – |
 | pip-audit 2.10.1 | alle vier Lock-Dateien, ohne Installation | **jede** bekannte Schwachstelle (`--strict`) | – |
 | Gitleaks 8.30.1 | gesamte Git-Historie, Ausgabe redigiert | **jedes** erkannte Secret | – |
 | Trivy 0.76.2 | gebaute Images, OS- und Python-Pakete | Backend/Frontend: HIGH + CRITICAL mit verfügbarem Fix; Ollama-Image (Upstream-Basis): CRITICAL mit Fix | alle Schweregrade als JSON |
@@ -143,7 +149,7 @@ Ausnahmen sind nur einzeln, begründet, befristet und per Review zulässig. Paus
 - **pip-audit:** `--ignore-vuln <ID>` im Workflow-Schritt und in `run_ci.py`, jeweils mit Kommentar und Ablaufdatum.
 - **Bandit:** `# nosec BXXX - Begründung` an der konkreten Zeile, niemals ohne Regel-ID.
 
-Aktuell gibt es **keine** Ausnahmen. Die vorhandenen `nosec`-Marker betreffen das XML-Parsen selbst erzeugter CI-Berichte und die Bind-Adresse des Mock-Dienstes im internen Netz.
+`.trivyignore` enthält keine CVE-Ausnahmen. Bestehende punktuelle `nosec`-Marker begründen konkrete Infrastruktur-/CI-Fälle. Zwei synthetische öffentliche DBLP-IDs in XML-Testfixtures tragen jeweils eine erklärte `gitleaks:allow`-Inlinekennzeichnung; dies sind keine Zugangsdaten und keine globale Scannerfreigabe.
 
 ## Datenschutz und CI-Sicherheit
 
@@ -178,9 +184,9 @@ Jeder Job schreibt eine Job Summary mit Testzahlen, Coverage, Scannerbefunden bz
 
 ## GitHub Ruleset für `main`
 
-**Status: vorbereitet, nicht aktiviert.** Die Workflow-Datei allein schützt `main` nicht. Erst das Ruleset blockiert Merges. `gh` war bei der Einrichtung nicht angemeldet, deshalb wurde nichts an den Repository-Einstellungen geändert.
+**Repositorydatei vorbereitet; aktueller Remote-Status nicht verifiziert.** Die Workflow-Datei allein schützt `main` nicht. Das historische Einrichtungsprotokoll meldete keine Aktivierung; eine daraus abgeleitete heutige Behauptung wäre unbelegt. In dieser Dokumentationspflege wurden keine Repository-Einstellungen geändert.
 
-Das Repository ist öffentlich, Rulesets sind deshalb ohne kostenpflichtigen Tarif verfügbar. Bei einem privaten Repository wären GitHub Pro, Team oder Enterprise nötig. Zum Anlegen sind Admin-Rechte am Repository erforderlich.
+Zum Anlegen oder Ändern sind entsprechende Repository-Adminrechte erforderlich. Aktuelle Tarif-/Repositoryvoraussetzungen vor einem tatsächlichen Eingriff anhand der GitHub-Dokumentation prüfen; dieser Text stellt weder Berechtigung noch Verfügbarkeit fest.
 
 Payload: [`infrastructure/scripts/github_ruleset.json`](../infrastructure/scripts/github_ruleset.json).
 
@@ -274,4 +280,16 @@ in dieser lokalen Änderung nicht überprüft.
 Der Docker-Build-Job prüft zusätzlich eine kontrollierte öffentliche Mockadresse
 aus allen drei privaten Netzwerk-Namespaces. Dies ist eine CI-Prüfung, keine
 Hochschulnetzabnahme. Aktuelle Grenzen und lokale Ergebnisse:
-[Privacy-Testbericht](security/privacy_test_results.md).
+[historischer Privacy-Testbericht](security/privacy_test_results.md) und [aktuelle lokale Validierung](validation.md).
+
+## Lokale Hilfsziele und vollständiger Workflow
+
+`run_ci.py ci` führt Lint, Format, kombinierte Tests/Coverage, Python-Securitytests/
+Scanner und Docker-Konfigurations-/BuildKit-Prüfungen aus. Bei fehlenden lokalen
+Werkzeugen können Hilfsschritte SKIPPED melden; das ist kein bestandener GitHub-Gesamtcheck.
+Gitleaks wird im lokalen Helfer nur bei vorhandenem Binary ausgeführt. **Trivy ist
+kein Ziel von `run_ci.py`**; der Image-Scan ist ein eigener CI-Schritt beziehungsweise
+muss separat ausgeführt werden. `docker-smoke` ist ein zusätzliches lokales Ziel.
+Privacy-Benchmarks, npm-Audit, Canary-Artefaktkontrolle und Remote-Gate müssen als
+weitere Prüfungen berücksichtigt werden. Das lokale Hilfsskript ersetzt weder
+Merge-Schutz noch tatsächliche GitHub-Ausführung.

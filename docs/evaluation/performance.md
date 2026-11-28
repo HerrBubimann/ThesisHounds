@@ -42,6 +42,13 @@ Klärungsbedarf sichtbar. Cancel/TTL/Delete/Shutdown behandeln weiterhin den gan
 Assessmentdatensatz. Nach Neustart ist die RAM-Demoanalyse verloren, nicht erfolgreich
 fortgesetzt; durable verschlüsselte Wiederaufnahme bleibt Produktionsarbeit.
 
-Tatsächliche neue Messungen und Grenzen: [Advanced-Ergebnisse](advanced_review_results.md).
+Benchmark v3 ergänzt begrenzte parallele Dispatchjobs und optionale Streamingmessung
+im selben Gateway. Tokenrate verwendet gemeldete Generationstokens/-dauer;
+Zeit bis zum ersten sichtbaren Fragment ist nur ein Proxy, exakte TTFT bleibt null.
+Die ausdrückliche Gutachtersitzungszeit zählt nur gestartete Sitzungen nach Freigabe;
+sie misst weder Aufmerksamkeit noch nachgewiesene Zeitersparnis.
+
+Aktuelle Implementierung und Grenzen: [Gutachterwerkzeuge](../research/reviewer_productivity_tools_2026-11-28.md).
+Historische Messungen: [Advanced-Ergebnisse](advanced_review_results.md).
 Es liegen keine reale Inferenzlast-, GPU-, Mehrbenutzer-, Zeitersparnis- oder
 Kosten-/Nutzenmessung mit Gutachtern vor.

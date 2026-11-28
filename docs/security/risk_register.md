@@ -5,7 +5,10 @@
 Qualitative Einschätzung, vorgeschlagene Rollen, keine erteilte Risikoannahme.
 [Prüfnachweise](../evaluation/security_results.md) beziehen sich auf lokale
 synthetische Tests. Frühere Imagebefunde weiter unten sind historische Scans;
-ein aktueller Docker-/Trivy-Lauf wurde hier nicht ausgeführt.
+die damalige Aussage zur fehlenden Engine ist historisch. Lokale App-Builds,
+Mock-E2E und Trivy vom 28.11.2026 sind in [validation.md](../validation.md) belegt.
+Je zuletzt gescanntem App-Image verbleiben 95 HIGH-/2 CRITICAL-Zuordnungen ohne
+verfügbaren Fix; Zielhostabnahme und Risikoannahme bleiben offen.
 
 | ID / Priorität | Risiko / Einstufung Wahrscheinlichkeit–Schaden | Kontrolle / konkreter Nachweis | Offen / vorgeschlagener Owner |
 |---|---|---|---|
@@ -21,8 +24,9 @@ ein aktueller Docker-/Trivy-Lauf wurde hier nicht ausgeführt.
 
 ### Reihenfolge bis zu den Präsentationen
 
-Bis **15.12.2026** zuerst überprüfbare Zielhost-/Worker-Netzisolation und erneute
-Docker-/Imagescans; parallel fachlich bestätigten PA1-Experimentkatalog und
+Lokale App-Docker-/Imagescans sind am 28.11.2026 nachgewiesen. Bis **15.12.2026**
+bleiben überprüfbare Zielhost-/Worker-Netzisolation und zielhostbezogene Neubauten/
+Scans offen; parallel fachlich bestätigten PA1-Experimentkatalog und
 freigegebene lokale Modellartefakte beschaffen. Danach einen kontrollierten
 PUBLIC-PDF→Human-Erstreview→lokale KI→Gegenprüfung→Human-Finale-Lauf mit
 Originalhash/Provenance und realen Messwerten zeigen. Ohne die Freigaben bleibt

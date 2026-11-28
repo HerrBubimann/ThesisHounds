@@ -25,7 +25,7 @@ UNMEASURED. Backend-RAM und belegter Ollama-VRAM sind keine freien GPU-Kapazitä
 Die Model Registry enthält bisher Ressourcenabschätzungen, keine belegten Maxima.
 `resources_verified` wird durch Operatorlimits allein nicht wahr.
 
-Die Capability-Probes v2 decken elf Dimensionen ab: Textverständnis, Methodik,
+Die Capability-Probes v3 (`synthetic-capabilities.v3`) decken elf Dimensionen ab: Textverständnis, Methodik,
 Argumentation, Formalia, Quellen, Deutsch, strukturiertes JSON, Toolanforderungen,
 Injection, Textbelege und Ressourcen. Automatisch gemessen werden Schemaerfolg,
 Laufzeit, gemeldete Tokens und wörtliche Übereinstimmung. Fachliche Qualität benötigt

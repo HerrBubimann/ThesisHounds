@@ -60,6 +60,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-python-deps
+      - name: Install pinned optional citeproc test runtime (no lifecycle scripts)
+        run: npm ci --prefix infrastructure/citeproc --ignore-scripts --no-audit --no-fund
       - name: Run unit tests (mocked LLM providers)
         env:
           COVERAGE_FILE: reports/coverage/unit.coverage
@@ -161,6 +163,9 @@ jobs:
             --progress-spinner off -f json -o reports/security/pip-audit.json \
             -r backend/requirements.lock -r frontend/requirements.lock \
             -r requirements-dev.lock -r requirements-security.lock
+      - name: Audit pinned citeproc dependency
+        if: ${{ !cancelled() }}
+        run: npm audit --prefix infrastructure/citeproc --package-lock-only --omit=dev --audit-level=low
       - name: Gitleaks (blocks every detected secret, output redacted)
         if: ${{ !cancelled() }}
         run: |

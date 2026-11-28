@@ -1,5 +1,9 @@
 # Advanced Review: Lieferstand und tatsächliche Ergebnisse
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 Stand **27.11.2026, Europe/Berlin**. Ausschließlich synthetische Fixtures, Quellcode
 und bereits geprüfte öffentliche Unterlagen. Keine echte wissenschaftliche Arbeit,
 keine institutionelle Freigabe, kein Modelltraining und keine Übertragung vertraulicher

@@ -6,7 +6,7 @@ verwenden dieselben konservativen Evidenzgrenzen. Kein zweiter LLM-Runtimepfad e
 
 | Stufe | Implementierter Nachweis | Ausdrückliche Grenze |
 |---|---|---|
-| 1 Extraktion | Nummerierte Einzeleinträge, einfache Autor-Jahr-Angaben, DOI-Kandidaten, genaue Seite/Zeichenoffsets | Mehrzeilige, komplexe, gescannte und uneindeutige Literatur bleibt unvollständig/manuell |
+| 1 Extraktion | Nummerierte und einfache eingerückte/mehrzeilige Autor-Jahr-Einträge, DOI-Kandidaten, genaue Seite/Zeichenoffsets | Komplexe, gescannte und uneindeutige Literatur bleibt unvollständig/manuell |
 | 2 Konsistenz | Zitat ohne extrahierten Eintrag, unbenutzte Kandidaten, Duplikatkandidaten, fehlende Autor/Titel/Jahr-Felder | Ein Parserfehler beweist weder fehlende Literatur noch Täuschung. Nicht jede Quellenart benötigt DOI/Jahr/öffentlichen Fundort |
 | 3 Metadaten | Lokaler DOI-/Titel-/Autoren-/Jahres-/Typ-/Versionsabgleich mit Provider, Snapshotzeit, Hash und geprüften Feldern | Titelabgleich ist eine dokumentierte Zeichenähnlichkeitsheuristik, keine Identitäts- oder Bedeutungswahrheit |
 | 4 Qualität | Begrenzter `research_quality.review_source_use` über bestehenden Router/Gateway: eine geerdete Passage, zugehöriger Eintrag, lokales Abstract/Volltext und freigegebenes Kriterium | Keine Hochschulregeln generieren. Ohne aktive Regel, passendes Dokument oder Material keine Modellkritik. Ergebnis nur PROPOSED/HUMAN_REVIEW_REQUIRED; falsche Quellenzitate werden zurückgewiesen. Im UI wegen ungeklärter offizieller Freigaben nicht automatisch aktiviert |

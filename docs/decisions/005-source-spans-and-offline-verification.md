@@ -15,3 +15,10 @@ Consequences: typed PDF objects may still be unreliable; this release has no new
 PDF/OCR ingress. Docling/PyMuPDF are researched candidates, not installed or approved
 parsers. Operator-provided snapshots need independent provenance review and refresh.
 No external research request is derived from confidential thesis contents.
+
+## Implementation follow-up, 2026-11-28
+
+The controlled registered PUBLIC-PDF worker and protected original viewer now extend
+source admission. Docling/PyMuPDF and private OCR remain unapproved candidates.
+Exact text offsets are separate from unverified PDF geometry; browser rendering is not
+an independent security raster comparison. [Current PDF boundary](../security/pdf_security.md).

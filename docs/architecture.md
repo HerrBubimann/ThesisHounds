@@ -1,10 +1,47 @@
 # Architektur und Entscheidungen
 
-## Bestehende Foundation und neue Komponenten
+Stand: 28.11.2026. Der primäre Bedienpfad ist der unabhängige Assessment-Workflow.
+Der LangGraph-Orchestrator unter `/api/v1/runs` bleibt ein getrennter Legacy-
+Experimentpfad. Beide nutzen dasselbe Gateway und dieselben Datenschutzgrenzen.
 
-FastAPI, Streamlit und ein gemeinsamer Ollama-Service bleiben die einzigen drei Compose-Services. Das Backend läuft als einzelner Prozess. Die vorhandene `LLMService`-Klasse ist jetzt eine kompatible Fassade über das gemeinsame Gateway; sie besitzt keinen separaten Inferenzpfad.
+## Unabhängige Begutachtung und Frontend
 
-| Pfad | Verantwortung |
+`backend/app/workflows/assessment_workflow.py` verwaltet menschliche Erstbewertung,
+unabhängige KI-Bewertung, Embargo, Vergleich, versionierte Entscheidungen und
+deterministischen Abschluss. Die aktive Schutzklasse kann durch menschliche Inhalte
+auf RESTRICTED steigen. Listen-/Statusprojektionen enthalten keine verdeckten Befunde.
+
+`agents/academic_review.py` führt sechs begrenzte Geschwisteraufgaben aus:
+wissenschaftlicher Review, Formalien/Quellen, Sprache, Retrieval, Zitierformat und
+Zahlenprüfung. Gemeinsame Hashes binden sie an Dokument und Profil. Pflichtfehler
+brechen die Gruppe ab; optionale Lücken bleiben im gemeinsamen Ergebnis sichtbar.
+`AISecondReviewer` verwendet Kontextindex, Pflicht-Coverage, semantische
+Zusatzplanung und begrenzte Gegenprüfung über die vorhandene Factory/Registry.
+
+Lokale Metadatenimporte und versionierte SQLite-/FTS5-Snapshots ersetzen keine
+Online-Recherche. Optionale lokale Encoder, LanguageTool und CSL benötigen eigene
+Konfiguration/Artefaktnachweise. Reproduzierbarkeitsfragen, numerische Kandidaten,
+Dublettengruppen und private Gutachternotizen sind keine automatischen Qualitätsurteile.
+
+Streamlit besitzt Dashboard, Anlageassistent, Fallliste, Quellen-/Richtlinienseiten
+und getrennte technische Zentren. Der Arbeitsbereich kombiniert Kriterien, Dokument
+und neutrale Mensch-/KI-Befunde in Tabs oder Spalten. Original-PDFs werden nur aus
+registrierten PUBLIC-Dateien erneut geprüft bereitgestellt. Synthetische Textfixtures
+haben kein Original-PDF. TXT-/Markdown-Gutachtenexport ist vorhanden; PDF/DOCX nicht.
+
+Details: [Frontend](frontend/architecture.md), [Reviewablauf](frontend/review_workflow.md),
+[Prüfpfade](research/parallel_scientific_checks.md),
+[Gutachterwerkzeuge](research/reviewer_productivity_tools_2026-11-28.md).
+
+## Gemeinsame Infrastruktur und Legacy-Komponenten
+
+Der Basis-Stack enthält FastAPI, Streamlit und einen Ollama-Service; `compose.ci.yaml`
+ersetzt den letzten durch einen Mock. Optionale GROBID-/Sync-/Provisioningdateien
+haben getrennte Aufgaben. Standardinferenz ist ein In-Process-Mock; ein geprüfter
+lokaler Pilot nutzt Ollama. Das Backend bleibt ein einzelner Prozess. `LLMService`
+ist eine kompatible Gatewayfassade ohne separaten Inferenzpfad.
+
+| Pfad unter `backend/app/` | Verantwortung |
 | --- | --- |
 | `llm/providers/base.py` | Provider-Protokoll: Completion, Structured Output, Health, Modell-/Capability-Discovery, Ressourcen |
 | `llm/providers/ollama.py` | Ollama-HTTP-Adapter, Timeouts, Fehlerbereinigung, Modellprüfung, Tokenmetadaten |
@@ -19,14 +56,16 @@ FastAPI, Streamlit und ein gemeinsamer Ollama-Service bleiben die einzigen drei 
 | `agents/agent_registry.py` | Agentenstatus, Beziehungen, Laufzeit, Modellaufrufe und Bereinigung |
 | `validation/` | Belegprüfung, unabhängige Modellreviews und Konfliktmarkierung |
 | `security/` | Zentrale Daten-/Provider-Policy und feste Werkzeug-Allowlist |
-| `services/document_store.py` | Lokales temporäres Dokumentformat und serverseitige synthetische Fixture |
+| `services/document_store.py` | Temporäre synthetische Dokumente und kontrollierte Registrierung/Integritätsprüfung öffentlicher Pilot-PDFs |
 | `monitoring/resources.py` | Lokale OS-/Prozessmetriken ohne Exporter |
 | `schemas/domain.py` | Gemeinsame Pydantic-Verträge für Planung, AgentSpecs, Läufe, Befunde und Reviews |
-| `api/control.py` | Neue Control-Center-Endpunkte |
+| `api/control.py` | Legacy-Control-, Modell-/Capability- und Ressourcen-Endpunkte |
+| `api/assessments.py` | Geschützte Assessment-, Dokument-, Beleg- und Entscheidungs-Endpunkte |
+| `research/`, `knowledge/` | Lokale Metadaten, Import-/Snapshotgrenzen und versionierte Mosbach-Kandidaten |
 
 Die drei Supervisoren sind konfigurierte Instanzen derselben Ausführungsinfrastruktur. Eine AgentSpec ist eine beschränkte Beschreibung, kein ausführbarer Code. Deshalb gibt es keine leeren `base_agent.py`-, Supervisor- oder Subagenten-Unterklassen. Der echte LangGraph befindet sich beim Orchestrator statt in einem zusätzlichen leeren Workflow-Paket.
 
-## Kontrollierter Durchlauf
+## Kontrollierter Legacy-Durchlauf A–D
 
 ```mermaid
 flowchart LR
@@ -75,9 +114,15 @@ Nach der Synthese wartet der Run auf menschliche Prüfung. Erst nach einer Entsc
 
 ## Zustand und Monitoring
 
+DEVELOPMENT benutzt eine gemeinsame synthetische Demo-Identität. ACL-Prüfungen
+sind implementiert, aber keine Hochschul-SSO-/Mandantentrennung. Assessment- und
+Legacy-Speicher sind getrennt und flüchtig. Öffentlich kuratierte Referenzkataloge
+und Modellgewichte haben einen separaten Lebenszyklus.
+
+
 Läufe, Befunde, Agenten und Entscheidungen liegen im Arbeitsspeicher eines Backend-Prozesses. LangGraph nutzt keine Cloud, keinen Checkpointer und keine externe Zustandspersistenz. Prozessneustart verliert den Laufzustand. Keine mehreren Uvicorn-Worker oder Replikate verwenden. Standardmäßig werden abgeschlossene Ausführungen nach einer Stunde entfernt, auch wenn menschliche Freigabe noch aussteht; bei neuen Läufen kann die Grenze von 20 aufbewahrten Läufen ältere abgeschlossene Ausführungen verdrängen.
 
-Temporäre Dokumentdateien liegen im Backend-tmpfs bzw. bei nativer Entwicklung unter `.runtime/documents`. Nur serverseitig erzeugte synthetische Dokumente können angelegt werden. Die Ingestion-Schnittstelle für echte Dokumente ist noch nicht öffentlich. Die Bereinigung entfernt die zum Run gehörende Datei, Agenten und Befunde; beim geordneten Shutdown werden Dokumentdateien entfernt. Ein hart beendeter nativer Prozess kann synthetische Restdateien hinterlassen.
+Temporäre Run-Dokumentdateien liegen im Backend-tmpfs bzw. nativ unter `tempfile.gettempdir()/thesishounds-demo/documents`, sofern nicht ein anderer zulässiger Store konfiguriert ist. Stores innerhalb des Quellrepositorys werden abgewiesen. Zusätzlich können Operatoren unabhängig geprüfte PUBLIC-PDFs außerhalb des Repositorys registrieren; es gibt keinen freien privaten Upload. Die Bereinigung entfernt die zum Run gehörende Datei, Agenten und Befunde; beim geordneten Shutdown werden Dokumentdateien entfernt. Ein hart beendeter nativer Prozess kann synthetische Restdateien hinterlassen.
 
 OS-CPU/RAM, Backend-RSS und während der Ausführung verfügbare Ollama-Modell-VRAM-Werte werden lokal abgetastet. Pro Run bleiben höchstens 128 Messpunkte sowie beobachtete Spitzenwerte erhalten. Stufenwechsel ergänzen Messpunkte. Kurze Spitzen können zwischen Messpunkten liegen. OS-Werte sind nicht nach Container oder Analyse isoliert; `/api/ps` meldet Modell-VRAM, keine vollständige GPU-Auslastung oder Gesamtkapazität. Prometheus/Grafana können später die Metrics-Schnittstelle ergänzen, sind keine zusätzlichen Services dieser Version.
 

@@ -52,7 +52,7 @@ assert dynamic >= 1, 'no dynamic subagent was created'
 print(f"OK  synthetic workflow D: {run['findings_count']} findings, {dynamic} dynamic agents,"
       f" {run['model_calls']} mock model calls, waiting for human review")
 assessment = call('/api/v1/assessments', {'work_type': 'PA1', 'profile_id': 'pa1-example',
-    'program': 'data_science_ai', 'cohort': 'DS25'})
+    'profile_confirmed': True, 'program': 'data_science_ai', 'cohort': 'DS25'})
 assert assessment['institutional_rules']['profile']['cohort'] == 'DS25'
 assert assessment['institutional_rules']['status'] == 'MANUAL_REVIEW_REQUIRED'
 assert not any(rule['active'] for rule in assessment['institutional_rules']['rules'])

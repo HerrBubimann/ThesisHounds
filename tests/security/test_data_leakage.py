@@ -62,7 +62,9 @@ def test_unclassified_tasks_and_discussion_canaries_never_reach_models(tmp_path,
         assert not app.provider.calls
         flow, provider = app.assessments, AssessmentProvider()
         app.gateway.providers["ollama"] = provider
-        key = flow.create(AssessmentRequest(work_type="PA1", profile_id="pa1-example"))["id"]
+        key = flow.create(
+            AssessmentRequest(work_type="PA1", profile_confirmed=True, profile_id="pa1-example")
+        )["id"]
         human = human_submission()
         human["criteria"][0]["observations"] = CANARY
         flow.submit_human(key, HumanReviewSubmission.model_validate(human))

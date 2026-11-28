@@ -34,7 +34,10 @@ layout/table/code/formula capabilities. It is a candidate for a later isolated p
 study, not a dependency or validated capability in this release. [PyMuPDF's own
 documentation](https://pymupdf.readthedocs.io/en/latest/about.html) describes PDF
 processing and AGPL/commercial licensing; licensing and parser threat boundaries need
-review before adoption. The present code only structures already supplied local text.
+review before adoption. The current implementation additionally accepts controlled registered public PDFs
+through the bounded pypdf worker and provides a protected local original viewer.
+Docling/PyMuPDF and private OCR remain unapproved. A browser-rendered page is not
+an independent server-side security raster comparison.
 
 [Crossref's Retraction Watch documentation](https://www.crossref.org/documentation/retrieve-metadata/retraction-watch/)
 describes public update/retraction metadata and a downloadable dataset; it also notes

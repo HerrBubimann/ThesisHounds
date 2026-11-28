@@ -1,5 +1,9 @@
 # Erneutes Privacy-/Security-Hardening: lokale Ergebnisse
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 Dieser Bericht beschreibt die vorherige Sicherheitsiteration. Der anschließende
 [Advanced-Review-Stand](../evaluation/advanced_review_results.md) enthält aktuelle
 Gesamttestzahlen, weitere Privacyregressionen und Scans der neuen App-Images.

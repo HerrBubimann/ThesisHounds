@@ -6,50 +6,37 @@ from streamlit.testing.v1 import AppTest
 
 from frontend.api_client import BackendError, request_backend
 from frontend.control_center import render_tree
-from tests.fixtures import MODEL, ROOT
+from tests.fixtures import ROOT
 
 APP_PATH = ROOT / "frontend/app.py"
 
 
-def test_dashboard_and_chat() -> None:
+def test_dashboard_and_system_navigation() -> None:
+    calls = []
+
     def backend(method, path, **kwargs):
+        calls.append((method, path))
+        if path == "/api/v1/security/status":
+            return {"mode": "DEVELOPMENT", "inference": "IN_PROCESS_MOCK_ONLY"}
+        if path == "/api/v1/assessments":
+            return []
         if path == "/health":
             return {"status": "ok"}
-        if path == "/api/v1/status":
-            return {
-                "ollama": "available",
-                "model": "qwen3:8b",
-                "model_available": True,
-                "detail": "Bereit",
-            }
-        if path == "/api/v1/models":
-            return {"models": [MODEL]}
-        if path == "/api/v1/models/status":
-            return {"models": []}
         if path == "/api/v1/system/resources":
-            return {
-                "privacy_mode": "LOCAL_ONLY",
-                "cpu_percent": 0,
-                "ram_available_bytes": 1024,
-                "active_agents": 0,
-            }
-        if path == "/api/v1/runs":
-            return []
-        assert method == "POST"
-        assert kwargs["json"]["prompt"] == "Test"
-        return {"model": "qwen3:8b", "answer": "Testantwort"}
+            return {"cpu_percent": 0, "ram_available_bytes": 1024}
+        raise AssertionError(path)
 
-    with (
-        patch("frontend.api_client.request_backend", side_effect=backend),
-        patch("frontend.control_center.request_backend", side_effect=backend),
-    ):
+    with patch("frontend.api_client.request_backend", side_effect=backend):
         app = AppTest.from_file(APP_PATH, default_timeout=10).run()
         assert not app.exception
         assert app.title[0].value == "ThesisHounds"
-        assert app.text_area[0].disabled and app.text_area[0].value == "Test"
-        app.button[1].click().run()
+        assert len(app.metric) == 4 and all(m.value == "0" for m in app.metric)
+        assert not app.text_area
+        next(b for b in app.button if b.label == "Systemstatus").click().run()
         assert not app.exception
-        assert app.text[0].value == "Testantwort"
+        assert any(m.value == "Erreichbar" for m in app.metric)
+        assert all(method == "GET" for method, _ in calls)
+        assert not any("/runs" in path for _, path in calls)
 
 
 def test_dashboard_when_backend_is_down() -> None:
@@ -59,7 +46,8 @@ def test_dashboard_when_backend_is_down() -> None:
         app = AppTest.from_file(APP_PATH, default_timeout=10).run()
         assert not app.exception
         assert app.error[0].value == "Backend nicht erreichbar"
-        assert app.button[1].disabled
+        assert not app.metric and not app.text_area
+        assert any(b.label == "Verbindung erneut prüfen" for b in app.button)
 
 
 def test_frontend_client_sanitizes_upstream_errors() -> None:
