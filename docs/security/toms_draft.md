@@ -9,7 +9,7 @@ Verantwortliche Rollen sind Vorschläge, keine erfolgten Benennungen.
 | Identität und Zugang | sichere Modi blockiert, keine selbst erfundenen Passwörter/Tokens | Hochschul-SSO, MFA nach Vorgabe, Joiner/Mover/Leaver, Break-glass |
 | Zugriff | Objektzuweisung plus einzelne Berechtigungen, keine automatischen Admin-Inhaltsrechte | echte Identitäten, Mandantenspeicher, dokumentierte Zuweisung und Ausnahmeprüfung |
 | Weitergabe | vier Klassen, IFC, externe Modelle/Recherche geschlossen, Defaultmock | Hostfirewall, DNS/IPv6, TLS-/mTLS-Identitäten und Abnahme |
-| Eingabe | strikte Schemas, generische Fehler, feste synthetische Quellen | sichere Parser-Sandbox, Malwareprüfung, autorisierte Dokumenteingänge |
+| Eingabe | strikte Schemas, generische Fehler, feste synthetische Quellen und kontrolliert registrierte PUBLIC-Test-PDFs mit begrenztem Preflight/Worker | vollständige private OS-Parser-/Malwareabnahme und institutionelle Autorisierung |
 | Nachvollziehbarkeit | technische lokale Auditmetadaten ohne Inhalte | unabhängige Auditintegrität, ACLs, Rotation und Aufbewahrungsfreigabe |
 | Verfügbarkeit | Quoten, Timeouts, kontrolliertes Abbrechen; kein Cloudfallback | Hochschulbetrieb, Wiederanlauf-/Restoretest, Notfallplan |
 | Trennung | scoped Agenten, getrennte Erstbewertungen, geschlossene Recherche | echte Tenant-/Hostgrenzen, getrennte Provisioning- und CI-Umgebung |

@@ -26,7 +26,8 @@ verwenden dessen Klasse auch beim Modellrouting. Öffentliche Quellenmetadaten
 stufen eine vertrauliche Bibliografie nicht herab.
 Menschliche freie Eingaben erhalten RESTRICTED, auch in einer synthetischen Analyse.
 Dokumentbasierte KI-Zweitbewertung erhält keine menschlichen Inhalte und kann
-deshalb weiter ausschließlich die PUBLIC-Fixture sehen. Diskussion und gemischte
+deshalb nur das zugelassene PUBLIC-Dokument sehen: synthetische Fixture oder
+registrierte öffentliche Pilotdatei. Diskussion und gemischte
 Berichte übernehmen dagegen RESTRICTED. Strukturierte Modelloutputs enthalten
 keine autoritative Klassifizierung; der Server ergänzt sie nach der Validierung.
 

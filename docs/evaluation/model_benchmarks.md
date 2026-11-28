@@ -1,5 +1,10 @@
 # Capability benchmark protocol and matrix
 
+Stand: 28.11.2026. Ausgabevertrag `synthetic-capabilities.v3`; elf Dimensionen.
+`--parallelism 1..4` begrenzt Dispatchjobs, hebt aber den bestehenden Gateway-
+Modellslot nicht an. `--stream-metrics` misst optional das erste nicht leere
+Antwortfragment, keine exakte TTFT; fehlende Telemetrie bleibt null.
+
 Beitrag: OFF-2/3/5, ENG-1. `app.evaluation.model_benchmark` erweitert die vorhandenen
 Probes auf elf Dimensionen. Registry-Schätzungen sind keine Benchmarkergebnisse.
 
@@ -31,6 +36,9 @@ $env:PYTHONPATH = 'backend'
 Der getrennte lokale Aufruf `--provider ollama` nutzt ausschließlich bereits lokal
 vorhandene Modelle und den IP-gepinnten, freigegebenen Endpoint; keine Downloads,
 keine externe API und kein Umgehen des Production Gates für echte Arbeiten.
+Zusätzlich muss `INFERENCE_MODE=local_pilot` mit passendem geprüftem Katalog und
+Modell konfiguriert sein; ein bloß installierter Modelltag genügt nicht.
+[Pilotvoraussetzungen](../setup.md#kontrollierter-public-pilot).
 Vorher Lizenzen, Artefakte, Modell-Digests und Hardware abnehmen. Stabile Gewichte,
 quantisierte Variante, Dataset-/Prompthash, Softwarestand und Betriebseinstellungen
 dokumentieren. Gemessene Qualität erst nach menschlichem Review in die Capability-

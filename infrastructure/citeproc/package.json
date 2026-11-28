@@ -1,0 +1,9 @@
+{
+  "name": "thesishounds-local-citeproc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Optional offline CSL renderer; no HTTP service or document upload",
+  "dependencies": {
+    "citeproc": "2.4.63"
+  }
+}

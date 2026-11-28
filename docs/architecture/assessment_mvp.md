@@ -1,50 +1,62 @@
-# Run the independent reviewer MVP
+# Run the independent reviewer workflow
 
-Use the existing local setup and installed models. In Streamlit choose
-**Unabhängige Begutachtung · Synthetischer MVP**, select PA1/PA2/BA and create a demo.
-The three versioned example profiles are deliberately similar; they demonstrate
-separate catalog selection without inventing official differences between work types.
+Current supported workflow, 2026-11-28. Start the
+[local mock setup](../setup.md); installed model weights are unnecessary for the
+default in-process mock. Select **Neue Begutachtung** in Streamlit and complete
+the document/catalog/privacy wizard. The PA1/PA2/BA EXAMPLE profiles are deliberately
+similar and are not official DHBW rubrics.
 
-1. Read the synthetic three-page document in the expander. No real thesis upload is enabled.
-2. Enter observations, strengths, weaknesses, rationale and questions for every criterion.
-   Select NOT_ASSESSABLE where information is missing. Alternatively upload a structured
-   JSON first review in the schema below. Explicitly check completion and release it.
-3. Start the independent AI review. It can also run while the human branch is open;
-   outputs remain server-hidden and the AI receives no human first-review data.
-4. When both are complete, explicitly open comparison. A matched quotation proves a
-   text location, not academic correctness. AI metadata/source verification is absent
-   unless explicitly supported; no public research is performed.
-5. Discuss a criterion or counterargument. Treat responses as suggestions. Record a
-   human conclusion and rationale for each criterion and explicitly choose whether
-   its AI finding should be included. Revisions append; originals remain unchanged.
-6. Read the deterministic Gutachtenentwurf, then explicitly finalize. No point/grade
-   suggestion is generated. Finalized decisions cannot be edited in this session.
+1. Choose work type, program/cohort, an admitted document and a server-offered catalog.
+   A registered public pilot requires separate operator evidence; arbitrary upload is unavailable.
+2. Read extracted document text. Registered originals without security indicators may
+   be displayed in the local PDF viewer. The three-page text fixture has no original PDF.
+3. Enter observations, strengths, weaknesses, rationale and questions for each criterion.
+   Select NOT_ASSESSABLE where needed. Explicit session draft saving is temporary and
+   is not a released backend review. Structured JSON import is optional.
+4. Explicitly freeze the complete human first review. Independently start AI review;
+   it may run while the human branch is open and receives no human review data.
+5. Once both branches finish and any required document-security review is resolved,
+   explicitly open comparison. Findings and local diagnostics share the server embargo.
+6. Inspect neutral human/AI comparisons, original evidence, source checks and reviewer
+   questions. Structured feedback and notes are versioned. Free discussion content is
+   RESTRICTED and model forwarding is currently blocked; documented human review without
+   model discussion is available.
+7. Record a human conclusion/rationale per criterion and explicitly include or reject
+   AI findings and approved notes. Read the deterministic draft and explicitly finalize.
+   Local TXT/Markdown downloads are available; PDF/DOCX report export is not connected.
 
-All profiles are EXAMPLE, not official DHBW criteria. Optional points, PDF/DOCX form
-extraction and real student documents are deferred. The API accepts only the fixed
-synthetic document ID and at most six criteria per current MVP catalog. The structured
-rubric importer returns a CANDIDATE even if imported content claims approval; official
-activation is an operator-controlled human review/configuration change.
+The AI branch uses mandatory coverage, bounded context, controlled specialist planning
+and model verification. Scientific review, formal/citation checks, language, retrieval,
+citation style and numeric diagnostics execute as bounded sibling tasks. Optional
+artifact/service gaps stay visible; model consensus is not academic proof.
+A missing optional AI result can remain unassessed; mandatory failure cannot be
+published as successful complete coverage.
 
 ## API sequence and first-review import
 
-`POST /api/v1/assessments` with `{"work_type":"PA1","profile_id":"pa1-example"}`
-returns an assessment ID. Use it under `/api/v1/assessments/{id}`:
+Create with `POST /api/v1/assessments` and
+`{"work_type":"PA1","profile_id":"pa1-example"}`.
+Use the returned UUID for the case-scoped endpoints:
 
 | Method / suffix | Purpose |
 |---|---|
-| GET (base), GET `/document` | Safe status and fixed synthetic document |
-| POST `/human-review` | Complete and freeze first review |
-| POST `/ai-review` | Start asynchronous independent criterion loop |
-| POST `/release` | `{"confirmed":true}` after both finish; open comparison |
-| GET `/comparison` | Original criterion reviews, decision history and discussion |
-| POST `/discussion` | Criterion ID and question; bounded local-model suggestion |
-| POST `/decisions` | Criterion ID, `include_ai_finding`, conclusion and rationale |
-| GET `/draft` | Human decisions required for every criterion |
-| POST `/finalize` | `{"confirmed":true}`; final human approval |
-| POST `/cancel` | Cancel an unfinished session/model task |
+| GET base; GET `/document`, `/original-pdf` | Safe status, assigned text and conditionally admitted original |
+| POST `/human-review`; POST `/ai-review` | Freeze complete first review; start independent async branch |
+| POST `/release` | `{"confirmed":true}` after both branches; disclose results |
+| GET `/comparison`, `/provenance`, `/findings/{finding_id}/evidence` | Released results, history and original references |
+| POST `/finding-feedback`, `/reviewer-notes` | Versioned finding response and private notes |
+| POST `/discussion`; POST `/manual-review` | Privacy-gated model discussion; explicit human-only review |
+| POST `/decisions` | Criterion, include decision, conclusion and rationale |
+| GET `/draft`; POST `/finalize` | Human decisions required; explicit final approval |
+| POST `/cancel`; DELETE base | Cancel work; remove the assigned volatile case |
 
-Example JSON upload (the UI still requires explicit release confirmation):
+The collection also exposes metadata listing, admitted profiles/pilot documents and
+a validated rules preview. Full methods, scope and other diagnostic endpoints:
+[API contracts](../setup.md#assessment-api).
+No endpoint grants institutional/model approval or admits arbitrary private files.
+
+Example JSON first review for the shipped three-criterion profiles.
+The UI still requires explicit release confirmation:
 
 ```json
 {
@@ -57,12 +69,20 @@ Example JSON upload (the UI still requires explicit release confirmation):
 }
 ```
 
-Independent review objects are not reused as legacy AI `/runs` objects. The old
-Control Center remains an experimental A–D demo with its own synthetic data, not a
-route for retrieving hidden assessment findings. No automatic migration or fallback
-publishes failed second reviews. Create a new synthetic session after model failure.
+## Controlled pilot and lifecycle
 
-Sessions are volatile, single-assessor and single-process, with bounded histories
-and existing retention settings. The local demo has no production identity/access
-management; assessment UUIDs are not an authentication mechanism. Do not deploy to
-multiple reviewers or use real work until PROD-1 is implemented and approved.
+The API accepts the fixed text fixture or a registered reviewed-public/synthetic
+pilot PDF subject to the existing PA1/program/catalog gates. The offline operator
+CLI and actual local-pilot configuration are documented in
+[setup](../setup.md#kontrollierter-public-pilot).
+Changing EXAMPLE to EXPERIMENT without independent evidence is not approval.
+
+Rubric import resets approval to CANDIDATE. Real private work, official grading,
+durable recovery and university identities remain blocked. ACL checks are present,
+but DEVELOPMENT shares one synthetic principal across browser sessions.
+Case UUIDs are not an authentication mechanism.
+
+Assessment results are not legacy `/runs` objects and cannot be exposed through
+legacy lists. Stores are volatile and single-process with bounded histories/TTL.
+Deleting a case does not delete the separately curated public pilot catalog.
+Create a new case after a failed AI branch; no fallback silently publishes partial results.

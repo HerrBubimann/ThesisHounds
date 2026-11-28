@@ -2,18 +2,25 @@
 
 import asyncio
 import json
+import time
 from contextlib import suppress
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
 from app.agents.academic_review import AcademicReviewServices
 from app.assessments.ai_review import AISecondReviewer
-from app.assessments.comparison import compare
-from app.assessments.coverage import check_coverage, criterion_states
+from app.assessments.comparison import (
+    balanced_findings,
+    compare,
+    finding_groups,
+    reviewer_questions,
+)
+from app.assessments.coverage import assessment_coverage, check_coverage, criterion_states
 from app.assessments.profile_registry import AssessmentProfile, ProfileRegistry
 from app.assessments.provenance import content_digest, snapshot
-from app.assessments.routine_checks import inventory
+from app.assessments.routine_checks import inventory, numerical_consistency
 from app.assessments.schemas import (
     AcademicDecision,
     AssessmentFinding,
@@ -24,14 +31,22 @@ from app.assessments.schemas import (
     DocumentSecurityDecision,
     FindingFeedback,
     HumanReviewSubmission,
+    MethodConfirmation,
+    ReviewerNote,
+    ReviewerTimeAction,
 )
-from app.assessments.scientific_consistency import consistency_map
+from app.assessments.scientific_consistency import (
+    applied_method_candidates,
+    consistency_map,
+    reproducibility_report,
+    update_evidence,
+)
 from app.config import Settings
 from app.core.configuration import RuntimeConfig
+from app.evaluation.metrics import feedback_codes, feedback_metrics
 from app.knowledge.registry import InstitutionalRegistry
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
-from app.research.local_verification import verify_local_sources
 from app.research.snapshot_store import load_cache
 from app.schemas.domain import now
 from app.security.access_control import AccessControl, principal
@@ -44,8 +59,11 @@ from app.security.document_security import (
 )
 from app.security.information_flow import InformationLabel
 from app.security.injection_detection import detect_injection
+from app.services.citation_style import LocalCitationStyle
 from app.services.document_intelligence import structure_document
 from app.services.document_store import SYNTHETIC_PAGES, Document, load_pilot_document
+from app.services.language_tool import LocalLanguageTool
+from app.services.local_embeddings import LocalEmbeddingRunner
 
 
 @dataclass
@@ -76,6 +94,13 @@ class Assessment:
     document_security: SecurityReport | None = None
     security_decisions: list[dict] = field(default_factory=list)
     semantic_security_checked: bool = False
+    language_checks: list[dict] = field(default_factory=list)
+    review_bundle: dict = field(default_factory=dict)
+    combined_result: dict = field(default_factory=dict)
+    reviewer_notes: list[dict] = field(default_factory=list)
+    method_confirmations: list[dict] = field(default_factory=list)
+    review_sessions: list[dict] = field(default_factory=list)
+    active_review_session: dict | None = None
 
 
 class AssessmentWorkflow:
@@ -87,10 +112,42 @@ class AssessmentWorkflow:
         self.tasks: dict[str, asyncio.Task] = {}
         self.legacy_active = lambda: 0
         self.access = AccessControl()
+        self.check_slots = asyncio.Semaphore(config.limits.max_parallel_agents)
         self.academic = AcademicReviewServices(
             InstitutionalRegistry.load(settings.config_dir / "institutions" / "dhbw" / "mosbach"),
             cache=load_cache(settings.public_metadata_dir),
+            language_tool=LocalLanguageTool(enabled=settings.enable_local_language_tool),
+            embeddings=LocalEmbeddingRunner.load(
+                settings.local_embedding_manifest_dir, resource_slots=gateway.slots
+            ),
+            citation_style=LocalCitationStyle(settings.citation_style_dir),
         )
+
+    def local_checks(self, record):
+        if record.review_bundle and record.review_bundle["document_sha256"] == content_digest(
+            record.document.pages
+        ):
+            return deepcopy(record.review_bundle["results"]["academic"])
+        return self.academic.check(record.document, record.institutional_rules)
+
+    @staticmethod
+    def combined_view(record):
+        value = {**deepcopy(record.combined_result), "classification": record.classification}
+        if record.review_bundle:
+            current = record.review_bundle["document_sha256"] == content_digest(
+                record.document.pages
+            ) and record.review_bundle["profile_sha256"] == content_digest(
+                record.profile.model_dump()
+            )
+            value["current_document_and_profile_match"] = current
+            if not current:
+                value["status"] = "STALE_REQUIRES_NEW_REVIEW"
+                value["execution_complete"] = False
+                value["configured_checks_complete"] = False
+                value["limitations"].append(
+                    {"check": "review_snapshot", "status": "DOCUMENT_OR_PROFILE_CHANGED"}
+                )
+        return value
 
     def cleanup(self):
         for key, record in list(self.records.items()):
@@ -185,12 +242,13 @@ class AssessmentWorkflow:
         )
         self.access.create(record.id)
         record.provenance_snapshot = snapshot(record, self.config)
+        record.provenance_snapshot["bibliographic_snapshot"] = self.academic.cache.snapshot_info()
         record.document_security = inspect_document(document)
         self.records[record.id] = record
         self.event(record, "PROFILE_SELECTED")
         return self.status(record.id)
 
-    def status(self, assessment_id: str) -> dict:
+    def status(self, assessment_id: str, *, include_analysis=True) -> dict:
         record = self.get(assessment_id)
         state = record.terminal or (
             "READY_FOR_FINALIZATION"
@@ -210,6 +268,8 @@ class AssessmentWorkflow:
         # Explicit projection. No model text, findings, error payloads, human text or draft.
         return {
             "id": record.id,
+            "created_at": record.created_at.isoformat(),
+            "updated_at": record.audit[-1]["at"] if record.audit else record.created_at.isoformat(),
             "state": state,
             "work_type": record.profile.work_type,
             "profile": record.profile.model_dump(),
@@ -230,12 +290,13 @@ class AssessmentWorkflow:
             "human_completed": record.human is not None,
             "ai_state": record.ai_state,
             "ai_released": record.ai_released,
-            "analysis_complete": record.ai_state == "COMPLETED"
-            and not any(
-                f.escalation.get("human_required", False)
-                for primary in record.ai
-                for f in [primary, *primary.supplemental]
-            ),
+            "ai_execution_complete": record.ai_state == "COMPLETED",
+            "analysis_complete": assessment_coverage(
+                record,
+                self.local_checks(record)["citations"],
+            )["analysis_complete"]
+            if record.ai_released and include_analysis
+            else False,
             "criteria_completed": len(record.ai) if record.ai_state == "COMPLETED" else 0,
             "criteria_total": len(record.profile.criteria),
             "deployment_mode": self.settings.deployment_mode,
@@ -264,7 +325,7 @@ class AssessmentWorkflow:
 
     def academic_checks(self, assessment_id: str) -> dict:
         record = self.released(assessment_id)
-        result = self.academic.check(record.document, record.institutional_rules)
+        result = self.local_checks(record)
         manifest = [
             {**check, "checked_at": now().isoformat(), "entry_id": row["entry"]["id"]}
             for row in result["citations"]["references"]
@@ -368,15 +429,38 @@ class AssessmentWorkflow:
                         record.ai_state = "PENDING"
                         self.event(record, "SECURITY_REVIEW_REQUIRED")
                         return
-                result = await self.reviewer.review(
-                    record.id,
-                    record.document.model_copy(deep=True),
-                    record.profile.model_copy(deep=True),
-                    record.budget,
-                    architecture=record.architecture,
+                document = record.document.model_copy(deep=True)
+                profile = record.profile.model_copy(deep=True)
+                bundle = await self.academic.run_checks(
+                    document,
+                    profile,
+                    deepcopy(record.institutional_rules),
+                    lambda: self.reviewer.review(
+                        record.id,
+                        document,
+                        profile,
+                        record.budget,
+                        architecture=record.architecture,
+                    ),
+                    slots=self.check_slots,
+                    runtime_limit=limits.agent_timeout_seconds,
                 )
+                result = bundle["results"]["scientific_review"]
             if not check_coverage(record.profile, result).complete:
                 raise ValueError("Incomplete criterion coverage")
+            citations = bundle["results"]["academic"]["citations"]
+            for primary in result:
+                for finding in [primary, *primary.supplemental]:
+                    update_evidence(finding, record.document, citation_report=citations)
+            record.research_manifest = [
+                {**check, "checked_at": now().isoformat(), "entry_id": row["entry"]["id"]}
+                for row in citations["references"]
+                for check in row["checks"]
+            ]
+            record.combined_result = self.academic.summarize(bundle, result)
+            record.review_bundle = bundle
+            language = bundle["results"]["language"]
+            record.language_checks = language if isinstance(language, list) else [language]
             record.ai, record.ai_state = result, "COMPLETED"
             self.event(record, "AI_COMPLETED")
         except asyncio.CancelledError:
@@ -413,6 +497,7 @@ class AssessmentWorkflow:
         human = {c.criterion_id: c for c in record.human.criteria}
         ai = {f.criterion_id: f for f in record.ai}
         states = criterion_states(record.profile, record.ai, record.ai_state)
+        citations = self.local_checks(record)["citations"]
         return {
             "criteria": [
                 {
@@ -426,17 +511,180 @@ class AssessmentWorkflow:
             ],
             "security_signals": detect_injection("\n".join(record.document.pages.values())),
             "routine_checks": inventory(record.document),
-            "source_checks": verify_local_sources(record.document, []),
+            "source_checks": {**citations, "citations": citations["references"]},
             "decisions": list(record.decisions),
             "discussion": list(record.discussion),
             "audit": list(record.audit),
             "classification": record.classification,
-            "coverage": check_coverage(record.profile, record.ai).__dict__,
+            "coverage": assessment_coverage(record, citations),
             "finding_feedback": list(record.finding_feedback),
-            "scientific_consistency": consistency_map(
-                record.document, structure_document(record.document)
+            "language_checks": list(record.language_checks),
+            "combined_result": self.combined_view(record),
+            "retrieval_comparison": deepcopy(
+                record.review_bundle.get("results", {}).get("retrieval", {})
             ),
+            "citation_style": deepcopy(
+                record.review_bundle.get("results", {}).get("citation_style", {})
+            ),
+            "scientific_consistency": consistency_map(
+                record.document, structure_document(record.document), record.ai
+            ),
+            "feedback_evaluation": feedback_metrics(record.finding_feedback, record.ai),
+            "reviewer_workspace": self.workspace(record),
         }
+
+    def workspace(self, record):
+        numerical = deepcopy(record.review_bundle.get("results", {}).get("numerical"))
+        if numerical is None:
+            numerical = numerical_consistency(record.document)
+        methods = applied_method_candidates(record.document, record.profile, record.ai)
+        confirmed = {(m["criterion_id"], m["family"]): m for m in record.method_confirmations}
+        methods = [m for m in methods if (m["criterion_id"], m["family"]) not in confirmed]
+        methods.extend(
+            {
+                "family": m["family"],
+                "criterion_id": m["criterion_id"],
+                "evidence": m["evidence"],
+                "use": "APPLIED",
+                "origin": "HUMAN_CONFIRMED",
+            }
+            for m in confirmed.values()
+        )
+        reproduction = reproducibility_report(record.document, record.profile, methods)
+        return {
+            "classification": record.classification,
+            "analysis_id": record.id,
+            "document_id": record.document.document_id,
+            "finding_groups": finding_groups(record.document, record.ai),
+            "balanced_review": balanced_findings(record.ai),
+            "reproducibility": reproduction,
+            "numerical": numerical,
+            "questions": reviewer_questions(
+                record.document, record.profile, record.ai, reproduction, numerical
+            ),
+            "notes": deepcopy(list({n["id"]: n for n in record.reviewer_notes}.values())),
+            "method_confirmations": deepcopy(record.method_confirmations),
+            "progress": {
+                c.id: {
+                    "human_first_review_completed": bool(record.human),
+                    "decided": any(d["criterion_id"] == c.id for d in record.decisions),
+                    "feedback_count": sum(
+                        entry["finding_id"]
+                        in {
+                            f.finding_id
+                            for p in record.ai
+                            for f in [p, *p.supplemental]
+                            if f.criterion_id == c.id
+                        }
+                        for entry in record.finding_feedback
+                    ),
+                }
+                for c in record.profile.criteria
+            },
+            "review_time": {
+                "completed_sessions": len(record.review_sessions),
+                "elapsed_seconds": sum(s["elapsed_seconds"] for s in record.review_sessions),
+                "active": record.active_review_session is not None,
+                "scope": "EXPLICIT_POST_RELEASE_SESSIONS_NOT_ATTENTION_OR_TIME_SAVED",
+                "human_time_saved_seconds": None,
+            },
+            "automatic_grade_effect": False,
+        }
+
+    def reviewer_note(self, assessment_id: str, note: ReviewerNote):
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        if len(record.reviewer_notes) >= 100:
+            raise LLMError(429, "REVIEWER_NOTE_LIMIT")
+        if note.criterion_id not in {c.id for c in record.profile.criteria}:
+            raise LLMError(422, "REVIEWER_NOTE_CRITERION_DENIED")
+        previous = next(
+            (n for n in reversed(record.reviewer_notes) if n["id"] == note.note_id), None
+        )
+        if note.note_id and (previous is None or previous["criterion_id"] != note.criterion_id):
+            raise LLMError(422, "REVIEWER_NOTE_REVISION_DENIED")
+        if note.finding_id and not any(
+            f.finding_id == note.finding_id and f.criterion_id == note.criterion_id
+            for p in record.ai
+            for f in [p, *p.supplemental]
+        ):
+            raise LLMError(422, "REVIEWER_NOTE_FINDING_DENIED")
+        questions = {q["id"]: q for q in self.workspace(record)["questions"]}
+        if note.question_id and (
+            note.question_id not in questions
+            or questions[note.question_id]["criterion_id"] != note.criterion_id
+        ):
+            raise LLMError(422, "REVIEWER_NOTE_QUESTION_DENIED")
+        entry = {
+            **note.model_dump(),
+            "id": note.note_id or str(uuid4()),
+            "revision": len(record.reviewer_notes) + 1,
+            "at": now().isoformat(),
+            "classification": "RESTRICTED",
+            "origin": "HUMAN_CONFIRMED",
+            "question_snapshot": deepcopy(questions.get(note.question_id)),
+        }
+        record.reviewer_notes.append(entry)
+        record.classification = combine(record.classification, "RESTRICTED")
+        self.event(record, "HUMAN_REVIEWER_NOTE")
+        return deepcopy(entry)
+
+    def confirm_method(self, assessment_id: str, confirmation: MethodConfirmation):
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        if len(record.method_confirmations) >= 50:
+            raise LLMError(429, "METHOD_CONFIRMATION_LIMIT")
+        if self.combined_view(record).get("status") == "STALE_REQUIRES_NEW_REVIEW":
+            raise LLMError(409, "REVIEW_DOCUMENT_OR_PROFILE_CHANGED")
+        method = {**confirmation.model_dump(), "use": "APPLIED", "origin": "HUMAN_CONFIRMED"}
+        try:
+            reproducibility_report(record.document, record.profile, [method])
+        except (ValueError, KeyError):
+            raise LLMError(422, "METHOD_CONFIRMATION_EVIDENCE_DENIED") from None
+        entry = {
+            **confirmation.model_dump(),
+            "revision": len(record.method_confirmations) + 1,
+            "at": now().isoformat(),
+            "classification": "RESTRICTED",
+        }
+        record.method_confirmations.append(entry)
+        record.classification = combine(record.classification, "RESTRICTED")
+        self.event(record, "HUMAN_METHOD_CONFIRMED")
+        return deepcopy(entry)
+
+    def reviewer_time(self, assessment_id: str, action: ReviewerTimeAction):
+        self.access.require(assessment_id, "review")
+        record = self.released(assessment_id)
+        self.writable(record)
+        if action.action == "START":
+            if record.active_review_session or len(record.review_sessions) >= 100:
+                raise LLMError(409, "REVIEW_SESSION_ACTIVE_OR_LIMIT")
+            record.active_review_session = {
+                "at": now().isoformat(),
+                "monotonic": time.monotonic(),
+                "owner": principal().subject,
+            }
+        else:
+            if (
+                not record.active_review_session
+                or record.active_review_session["owner"] != principal().subject
+            ):
+                raise LLMError(409, "NO_OWN_ACTIVE_REVIEW_SESSION")
+            record.review_sessions.append(
+                {
+                    "started_at": record.active_review_session["at"],
+                    "ended_at": now().isoformat(),
+                    "elapsed_seconds": max(
+                        0, time.monotonic() - record.active_review_session["monotonic"]
+                    ),
+                }
+            )
+            record.active_review_session = None
+        record.classification = combine(record.classification, "RESTRICTED")
+        self.event(record, "HUMAN_REVIEW_TIME_" + action.action)
+        return self.workspace(record)["review_time"]
 
     @staticmethod
     def finding_view(record: Assessment, finding: AssessmentFinding) -> dict:
@@ -452,6 +700,12 @@ class AssessmentWorkflow:
         return {
             **finding.model_dump(exclude={"supplemental"}),
             "human_approval": status,
+            "information_origins": {
+                "description": "UNVERIFIED_FINDING_PROPOSAL",
+                "rationale": "MODEL_INTERPRETATION",
+                "evidence_status": "DETERMINISTIC_CHECK",
+                "human_approval": "HUMAN_CONFIRMED" if status != "PENDING" else "PENDING",
+            },
             "feedback_history": [
                 e for e in record.finding_feedback if e["finding_id"] == finding.finding_id
             ],
@@ -492,11 +746,13 @@ class AssessmentWorkflow:
             raise LLMError(422, "Korrektur oder Ergänzung erforderlich.")
         entry = {
             **feedback.model_dump(),
+            **feedback_codes(feedback.action, feedback.reason),
             "revision": len(record.finding_feedback) + 1,
             "at": now().isoformat(),
             "analysis_id": record.id,
             "classification": Classification.RESTRICTED,
             "automatic_training": False,
+            "origin": "HUMAN_CONFIRMED",
         }
         record.finding_feedback.append(entry)
         record.classification = combine(record.classification, Classification.RESTRICTED)
@@ -530,9 +786,14 @@ class AssessmentWorkflow:
                 for f in flat
             ],
             "research_sources": list(record.research_manifest),
+            "combined_result": self.combined_view(record),
             "human_decisions": list(record.decisions),
             "finding_feedback": list(record.finding_feedback),
+            "feedback_evaluation": feedback_metrics(record.finding_feedback, record.ai),
             "academic_decisions": list(record.academic_decisions),
+            "reviewer_notes": deepcopy(record.reviewer_notes),
+            "method_confirmations": deepcopy(record.method_confirmations),
+            "review_sessions": deepcopy(record.review_sessions),
             "document_security_decisions": list(record.security_decisions),
             "model_calls": record.budget.calls,
             "observed_tokens": record.budget.observed_tokens,
@@ -555,7 +816,7 @@ class AssessmentWorkflow:
         matched = bool(
             finding.evidence_status == "QUOTE_MATCHED"
             and finding.quote.strip()
-            and finding.quote in page_text
+            and page_text.count(finding.quote) == 1
         )
         start = page_text.index(finding.quote) if matched else None
         end = start + len(finding.quote) if matched else None
@@ -685,7 +946,7 @@ class AssessmentWorkflow:
         latest_feedback = {e["finding_id"]: e for e in record.finding_feedback}
         if any(
             latest_feedback.get(key, {}).get("action")
-            in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"}
+            in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE", "MANUAL_REVIEW_REQUIRED"}
             for key in selected
         ):
             raise LLMError(409, "Befundfeedback vor Übernahme klären.")
@@ -706,12 +967,21 @@ class AssessmentWorkflow:
 
     def draft(self, assessment_id: str) -> dict:
         record = self.released(assessment_id)
+        if self.combined_view(record).get("status") == "STALE_REQUIRES_NEW_REVIEW":
+            raise LLMError(409, "REVIEW_DOCUMENT_OR_PROFILE_CHANGED")
         if not self.decisions_complete(record):
             raise LLMError(409, "Menschliche Entscheidungen zu allen Kriterien fehlen.")
         decisions = {d["criterion_id"]: d for d in record.decisions}
         findings = {f.criterion_id: f for f in record.ai}
         # Deterministic synthesis prevents new LLM criticism appearing at finalization.
         parts = []
+        duplicates = {
+            key: group["id"]
+            for group in finding_groups(record.document, record.ai)["groups"]
+            if group["exact_duplicates"]
+            for key in group["finding_ids"]
+        }
+        emitted = set()
         for c in record.profile.criteria:
             decision, finding = decisions[c.id], findings.get(c.id)
             text = f"{c.id}: {decision['conclusion']}\nBegründung: {decision['rationale']}"
@@ -726,10 +996,27 @@ class AssessmentWorkflow:
                         e for e in record.finding_feedback if e["finding_id"] == value.finding_id
                     ]
                     latest = feedback[-1] if feedback else {}
-                    if latest.get("action") in {"REJECT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"}:
+                    if latest.get("action") in {
+                        "REJECT",
+                        "NOT_RELEVANT",
+                        "INSUFFICIENT_EVIDENCE",
+                        "MANUAL_REVIEW_REQUIRED",
+                    }:
                         raise LLMError(409, "Befundfeedback vor Finalisierung klären.")
                     feedback_state = self.feedback_state(record, value.finding_id)
                     description = feedback_state["correction"] or value.description
+                    representation = (
+                        duplicates.get(value.finding_id, value.finding_id),
+                        description,
+                        tuple(feedback_state["supplements"]),
+                    )
+                    if representation in emitted:
+                        text += (
+                            "\nIdentischer freigegebener Befund zusammengefasst; "
+                            "weitere Original-ID: " + value.finding_id
+                        )
+                        continue
+                    emitted.add(representation)
                     text += (
                         f"\nFreigegebener Befund: {description}"
                         f"\nOriginalbeleg des Modellvorschlags (Seite {value.page}; "
@@ -744,6 +1031,14 @@ class AssessmentWorkflow:
             parts.append(text)
         label = "Menschlich freigegeben" if record.terminal == "FINALIZED" else "Gutachtenentwurf"
         academic = {d["finding_id"]: d for d in record.academic_decisions}
+        for note in {n["id"]: n for n in record.reviewer_notes}.values():
+            if note["include_in_draft"]:
+                parts.append(
+                    "Freigegebene Gutachteranmerkung zu "
+                    + note["criterion_id"]
+                    + ": "
+                    + note["text"]
+                )
         for decision in academic.values():
             if decision["decision"] == "ACCEPTED":
                 parts.append(
@@ -755,6 +1050,7 @@ class AssessmentWorkflow:
         return {
             "label": label,
             "text": label + "\n\n" + "\n\n".join(parts),
+            "combined_result": self.combined_view(record),
             "classification": record.classification,
         }
 
@@ -765,6 +1061,18 @@ class AssessmentWorkflow:
         if self.security_pending(record):
             raise LLMError(423, "LOCAL_DOCUMENT_REVIEW_REQUIRED")
         self.draft(assessment_id)
+        if record.active_review_session:
+            record.review_sessions.append(
+                {
+                    "started_at": record.active_review_session["at"],
+                    "ended_at": now().isoformat(),
+                    "elapsed_seconds": max(
+                        0, time.monotonic() - record.active_review_session["monotonic"]
+                    ),
+                    "closed_by": "FINALIZATION",
+                }
+            )
+            record.active_review_session = None
         record.terminal = "FINALIZED"
         self.event(record, "FINAL_HUMAN_RELEASE")
         return self.draft(assessment_id)

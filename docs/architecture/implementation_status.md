@@ -1,36 +1,36 @@
 # Professor feedback delivery status
 
-Advanced Review 27.11.2026: [current integration and measured local checks](../evaluation/advanced_review_results.md).
-Scoped local retrieval, evidence/consistency states, adaptive escalation, provenance
-and structured finding feedback extend the existing pipeline. The historical table
-below does not override the current production blockers or imply real model validation.
+Verified against the repository on 2026-11-28. This table describes implemented
+software and remaining evidence, not stakeholder approval. The initial
+[gap analysis](professor_feedback_gap.md) remains a historical baseline.
+The original project slides, primary meeting record and approved detailed rubric
+are not available; OFF/G identifiers are inherited mappings, not newly confirmed requirements.
 
-Security update 2026-11-26: the current application defaults to an in-process mock,
-blocks real content/network inference and refuses UNIVERSITY_SECURE startup.
-The following original delivery table does not authorize production use or override
-the current [privacy architecture](../security/privacy_architecture.md),
-[production blockers](../security/production_readiness.md) or
-[observed test results](../security/privacy_test_results.md).
-
-2026-11-26. This records the incremental delivery after the initial
-[gap analysis/backlog](professor_feedback_gap.md). It is not a claim that all
-production Definition-of-Done items or stakeholder decisions are complete.
-
-| Backlog | Delivered | Remaining |
+| Backlog | Delivered in the current code | Remaining / blocked |
 |---|---|---|
-| INF-1 | Local defaults retained; university HTTPS host allowlist, verified TLS/custom CA and bearer support, timeout/model aliases, concurrency limit, standalone university Compose and static CI validation | IT-provided network/auth/CA, hardware and privacy release; no live university test |
-| INF-2 | HF provenance/revision/hash/license/format/capability metadata and enabled-artifact approval validation; provisioning runbook | Actual artifact review/import/conversion and license decisions |
-| RUB-1 | Separate PA1/PA2/BA EXAMPLE YAML profiles; strict registry; bounded JSON/YAML candidate import with approval reset | Official documents, per-program criteria, Palleduhn extraction and human promotion workflow |
-| MVP-1 | Isolated volatile session store; frozen human review; safe status projection, dual release, API embargo and bypass tests | Durable version/audit storage and owner/tenant authorization |
-| MVP-2 | Fixed per-criterion AI review using existing category model assignments, page/quote checks, coarse comparison, grounded local discussion, append-only human decisions, deterministic draft, explicit final release, cancellation, Streamlit UI | Dynamic factory/cross-review integration in the new criterion workflow, richer progress/tree, optional criteria semantics, real document import |
-| SEC-1 | Strict no-score/tool outputs, heuristic injection signals, closed gateway contract, PUBLIC-label rejection, shared model-call semaphore and active-run admission, scoped lifetime budgets, retention and history bounds | PDF/metadata detection, identity masking, advanced red-team outcome evaluation, production network enforcement |
-| Routine checks (phase 3 start) | Deterministic DOI candidate inventory before model calls, repeated mentions counted, explicitly UNVERIFIED | Bibliography/citation matching, reference metadata completeness, chapter and numbering checks need reliable extraction and approved criteria |
-| EVAL-1 | Runnable synthetic gateway probe for model IDs/repeats, schema/errors/latency/tokens/resource snapshots; study protocol and metrics | Real-model results, GPU telemetry, digest/hardware snapshot completeness, expert quality labels, tool-calling and participant study |
-| DOC-1 | Source register and targeted current research, framework comparison, ADRs, deployment/provisioning docs, risk register/threat model, stakeholder questions and validation record | Full-text systematic literature synthesis and actual stakeholder decisions |
-| RES-1 | ResearchQuery and ResearchEvidence contracts; no external client/provider or document-store reference | Isolated service, approved query workflow, provider auth/terms/rates/response validation and internal scoped index |
-| SCORE-1 | Disabled; activation fails closed, no model scoring/grade fields or target-grade optimizer | Official scoring/scale decisions and justified deterministic implementation |
+| INF-1 | Pinned local transport, exact university HTTPS host/IP/TLS controls and standalone university Compose configuration | University identity/network/storage acceptance; UNIVERSITY_SECURE deliberately refuses startup |
+| INF-2 | Registry provenance, full artifact digest and license/security gates; separate provisioning lifecycle | Actual model approvals, verified artifacts and a successful real-model run |
+| RUB-1 | Versioned PA1/PA2/BA examples, bounded candidate importer, cohort-specific Mosbach candidates and conflict handling | Authoritative catalog, Palleduhn original, validity and independent institutional promotion |
+| MVP-1 | Separate volatile assessment store, ACL checks, immutable human first release, safe list/status projections and server embargo | Real university identities, tenant isolation, durable audit/storage and recovery |
+| MVP-2 | Mandatory coverage, scoped context retrieval, semantic specialist proposals, bounded adversarial review, neutral comparison, feedback, human decisions and deterministic final draft | Measured academic value, private-document acceptance, authorized RESTRICTED discussion |
+| SEC-1 | PDF preflight/worker limits, injection indicators, owner/tool/model scope, IFC, request/response bounds, quarantine and human security decisions | Complete OS parser sandbox, OCR/image attack coverage, target-host/SSO/organizational release |
+| Routine checks | Offline bibliography/identifier checks, formal candidates, conservative numeric comparisons and method-bound reproducibility questions | Reliable visual extraction, complete source corpus, active official rules and expert validation |
+| Reviewer productivity | Local finding groups, original evidence, reviewer questions, versioned notes and explicitly measured review sessions | Validated usefulness, attention/time-savings evidence and real expert references |
+| Frontend | Dashboard, guided creation, case list, criteria/document/finding workspace, source and Mosbach views, model/security/system pages, protected original PDF and TXT/Markdown export | Evaluation-report API, assessment-agent live events, synchronized PDF geometry, full accessibility acceptance |
+| EVAL-1/2 | CLI A–E lab, paired variants/ablations, reference interfaces, model benchmark v3 with bounded parallelism and optional stream metrics | Real-model results, exact TTFT, per-model peaks, human quality/bias study |
+| DOC-1 | Source register, ADRs, architecture, workflow and security docs, risks and current validation record | Full systematic literature review and actual stakeholder decisions |
+| RES-1 | Offline public provider adapters, SQLite/FTS5 snapshots, controlled library exports and separate public dataset sync | Document-derived online research, private institutional index, approved query service |
+| SCORE-1 | Disabled at startup and output boundaries; no model grades or target-grade optimizer | Approved scales, policy decision and defensible implementation |
 
-Production blockers: official catalogs/scales, university IT information, approved
-document and research data handling, reviewer identity/authorization, durable audit,
-PDF/DOCX parsing review and scientific validation. Example findings and mocked test
-responses do not establish real model performance or reduced automation bias.
+The default is DEVELOPMENT with in-process mock inference. A separately configured
+local pilot may process registered synthetic/reviewed-public PDFs through approved
+Ollama artifacts. That exception does not admit confidential student work.
+Source parsing and proposal existence never establish academic truth.
+
+Latest software evidence: **956 tests, 87.06% combined coverage** in the reviewer-tool
+refinement run on 2026-11-28. Numeric interpretation guards, perspective-preserving
+deduplication and infrastructure metric aggregates extend the existing components.
+Local image builds, mock container E2E and browser checks refer to the preceding
+frontend iteration; they were not rerun for these refinements.
+[Validation](../validation.md) · [Frontend limitations](../frontend/limitations.md) ·
+[Production blockers](../security/production_readiness.md)

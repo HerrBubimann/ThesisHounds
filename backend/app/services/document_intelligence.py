@@ -3,12 +3,22 @@
 import re
 from dataclasses import asdict, dataclass
 
+from app.llm.errors import LLMError
+
 HEADINGS = re.compile(
     r"^(?:(?P<number>\d+(?:\.\d+)*)\s+)?(?P<title>"
     r"Einleitung|Forschungsfrage|Methodik|Methode|Ergebnisse|Diskussion|Fazit|"
     r"Zusammenfassung|Zielsetzung|Theoretische Grundlagen|Theorie|Forschungsstand|"
     r"Datenerhebung|Analyse|Limitationen|Literaturverzeichnis|Literatur|References|"
     r"Conclusion|Introduction)\b[:.]?",
+    re.I,
+)
+
+# Cues request interpretation; they never establish absence, adequacy or a contradiction.
+INTERPRETATION_CUES = re.compile(
+    r"\b(?:nicht|kein\w*|ohne|fehlt|fehlen|unklar|unbekannt|undokumentiert|"
+    r"not|no|without|missing|unknown|unclear|undocumented|"
+    r"wäre\w*|würde\w*|könnte\w*|could|would|might|hypothetisch\w*|hypothetical)\b",
     re.I,
 )
 
@@ -33,6 +43,7 @@ class DocumentStructure:
     sections: tuple[dict, ...]
     warnings: tuple[str, ...]
     quotations: tuple[dict, ...] = ()
+    objects: tuple[dict, ...] = ()
 
     def locate(self, page: int | None, quote: str):
         return next((b for b in self.blocks if b.page == page and quote and quote in b.text), None)
@@ -53,6 +64,8 @@ class DocumentStructure:
 
 
 def structure_document(document) -> DocumentStructure:
+    if sum(len(text.encode("utf-8")) for text in document.pages.values()) > 2_000_000:
+        raise LLMError(413, "DOCUMENT_STRUCTURE_TOO_LARGE")
     blocks, sections, chapter = [], [], None
     warnings = ["TEXT_ONLY: tables, figures, formulas and code have no verified visual extraction"]
     for page, text in sorted(document.pages.items()):
@@ -86,6 +99,8 @@ def structure_document(document) -> DocumentStructure:
                 "references",
             }:
                 kind = "BIBLIOGRAPHY"
+            if len(blocks) >= 4096:
+                raise LLMError(413, "DOCUMENT_STRUCTURE_TOO_LARGE")
             blocks.append(
                 TextBlock(
                     f"p{page}-b{index}",
@@ -116,4 +131,20 @@ def structure_document(document) -> DocumentStructure:
         tuple(sections),
         tuple(warnings),
         quotations,
+        tuple(
+            {
+                "id": block.id,
+                "kind": block.kind,
+                "page": block.page,
+                "start": block.start,
+                "end": block.end,
+                "text": block.text,
+                "chapter": block.chapter,
+                "visual_extraction_verified": False,
+                "source": "ORIGINAL_EXTRACTED_TEXT",
+                "image_available": False,
+            }
+            for block in blocks
+            if block.kind in {"TABLE", "FIGURE", "FORMULA"}
+        ),
     )

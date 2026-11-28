@@ -6,7 +6,13 @@ from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 
 from app.assessments.routine_checks import DOI
-from app.research.provider_registry import LocalResearchCache, SourceType, normalize_doi
+from app.research.isbn import normalize_isbn
+from app.research.provider_registry import (
+    SOURCE_PROVIDERS,
+    LocalResearchCache,
+    SourceType,
+    normalize_doi,
+)
 from app.security.classification import Classification, classify, combine
 
 STATUSES = frozenset(
@@ -23,6 +29,9 @@ STATUSES = frozenset(
         "RESEARCH_BLOCKED_BY_PRIVACY",
         "PROVIDER_UNAVAILABLE",
         "MANUAL_REVIEW_REQUIRED",
+        "FUZZY_MATCH_CANDIDATE",
+        "PROVIDER_CONFLICT",
+        "PARTIAL_METADATA",
     }
 )
 
@@ -43,6 +52,7 @@ class BibliographicEntry:
     classification: Classification = Classification.RESTRICTED
     analysis_id: str = ""
     document_id: str = ""
+    isbn: str = ""
 
     def __post_init__(self):
         object.__setattr__(self, "classification", classify(self.classification))
@@ -69,11 +79,12 @@ def extract_citations(document) -> dict:
             parsed = re.match(
                 r"(?:\[(?P<number>\d+)\]\s*)?(?P<author>[\wÀ-ž'-]+)"
                 r"(?:,?\s+(?:et al\.\s*)?)\((?P<year>\d{4})\)"
-                r"[.:]?\s*(?P<title>.+?)(?:\.\s*(?:https?://|doi:|10\.)|$)",
+                r"[.:]?\s*(?P<title>.+?)(?:\.\s*(?:https?://|doi:|10\.|ISBN)|$)",
                 line,
             )
             doi = DOI.search(line)
             internal = bool(re.search(r"\bintern(?:al|e|es|er)?\b|unternehmensintern", line, re.I))
+            isbn_match = re.search(r"ISBN(?:-1[03])?\s*:?\s*([0-9Xx -]{10,22})", line)
             entries.append(
                 BibliographicEntry(
                     parsed.group("number")
@@ -89,9 +100,12 @@ def extract_citations(document) -> dict:
                     parsed.group("title").rstrip(". ") if parsed else None,
                     SourceType.INTERNAL
                     if internal
+                    else SourceType.BOOK
+                    if isbn_match and normalize_isbn(isbn_match.group(1))
                     else SourceType.PREPRINT
                     if re.search(r"\b(?:arxiv|preprint)\b", line, re.I)
                     else SourceType.UNKNOWN,
+                    isbn=normalize_isbn(isbn_match.group(1)) if isbn_match else "",
                     **scope,
                 )
             )
@@ -182,24 +196,65 @@ def verify_citations(document, cache: LocalResearchCache | None = None, *, extra
     rows = []
     private = level != Classification.PUBLIC
     for entry in entries:
-        snapshots = cache.lookup(entry.doi) if entry.doi else []
+        local_only = entry.source_type in {
+            SourceType.INTERNAL,
+            SourceType.INTERVIEW,
+            SourceType.OWN_DATA,
+        }
+        snapshots = (
+            []
+            if local_only
+            else (
+                cache.lookup(entry.doi)
+                if entry.doi
+                else cache.lookup_isbn(entry.isbn)
+                if entry.isbn
+                else []
+            )
+        )
+        fuzzy_candidates = []
+        if not snapshots and entry.title and not local_only:
+            terms = " ".join(re.findall(r"\w+", entry.title)[:2])
+            fuzzy_candidates = [
+                {
+                    "provider": r.provider,
+                    "provider_id": r.provider_id,
+                    "doi": r.doi,
+                    "isbn": r.isbn,
+                    "title_similarity": round(
+                        SequenceMatcher(None, _norm(entry.title), _norm(r.title)).ratio(), 4
+                    ),
+                    "status": "FUZZY_MATCH_CANDIDATE",
+                    "snapshot_sha256": r.snapshot_sha256,
+                }
+                for r in cache.search(terms)
+                if terms
+            ]
         metadata = [r for r in snapshots if r.provider != "retraction_watch"]
-        checks, mismatches = [], []
+        preferred = SOURCE_PROVIDERS.get(entry.source_type)
+        unsuitable = preferred is not None and any(r.provider not in preferred for r in metadata)
+        checks, mismatches, fuzzy, partial = [], [], False, False
         for record in metadata:
-            checked = {"doi": "MATCH"}
+            checked = {"doi" if entry.doi else "isbn": "MATCH"}
             if entry.title and record.title:
+                ratio = SequenceMatcher(None, _norm(entry.title), _norm(record.title)).ratio()
                 checked["title"] = (
                     "MATCH"
-                    if SequenceMatcher(None, _norm(entry.title), _norm(record.title)).ratio()
-                    >= 0.96
-                    else "MISMATCH"
+                    if _norm(entry.title) == _norm(record.title)
+                    else ("FUZZY_CANDIDATE" if ratio >= 0.85 else "MISMATCH")
                 )
+                fuzzy |= checked["title"] == "FUZZY_CANDIDATE"
             if entry.author and record.authors:
                 checked["author"] = (
                     "MATCH"
-                    if any(_norm(entry.author) in _norm(a) for a in record.authors)
+                    if any(_norm(entry.author) == _norm(a) for a in record.authors)
+                    else "PARTIAL_NAME_CANDIDATE"
+                    if any(
+                        _norm(entry.author) in [_norm(t) for t in a.split()] for a in record.authors
+                    )
                     else "MISMATCH"
                 )
+                fuzzy |= checked["author"] == "PARTIAL_NAME_CANDIDATE"
             if entry.year and record.year:
                 checked["year"] = "MATCH" if entry.year == record.year else "MISMATCH"
             if entry.version and record.version:
@@ -208,6 +263,16 @@ def verify_citations(document, cache: LocalResearchCache | None = None, *, extra
                 checked["source_type"] = (
                     "MATCH" if entry.source_type == record.source_type else "MISMATCH"
                 )
+            absent = [
+                field
+                for field, available in (
+                    ("title", entry.title and record.title),
+                    ("author", entry.author and record.authors),
+                    ("year", entry.year and record.year),
+                )
+                if not available
+            ]
+            partial |= bool(absent)
             checks.append(
                 {
                     "provider": record.provider,
@@ -216,23 +281,44 @@ def verify_citations(document, cache: LocalResearchCache | None = None, *, extra
                     "provenance": record.provenance,
                     "fields": checked,
                     "scope": "LOCAL_METADATA_SNAPSHOT",
+                    "snapshot_version": record.snapshot_version,
+                    "missing_comparison_fields": absent,
                 }
             )
             mismatches.extend(k for k, v in checked.items() if v == "MISMATCH")
         statuses = []
-        if entry.source_type == SourceType.INTERNAL:
+        provider_conflicts = [
+            field
+            for field, values in {
+                "title": {_norm(r.title) for r in metadata if r.title},
+                "year": {r.year for r in metadata if r.year},
+                "version": {r.version for r in metadata if r.version},
+                "authors": {
+                    tuple(sorted(_norm(a) for a in r.authors)) for r in metadata if r.authors
+                },
+            }.items()
+            if len(values) > 1
+        ]
+        if local_only:
             statuses = ["INTERNAL_SOURCE"]
             checks = []
         else:
             statuses.extend(sorted({r.notice for r in snapshots if r.notice in STATUSES}))
             if mismatches:
                 statuses.append("METADATA_MISMATCH")
+            elif fuzzy:
+                statuses.append("FUZZY_MATCH_CANDIDATE")
+            elif (partial or unsuitable) and metadata:
+                statuses.append("PARTIAL_METADATA")
             elif metadata:
                 statuses.append("VERIFIED_METADATA")
             else:
                 statuses.extend(["NOT_FOUND", "MANUAL_REVIEW_REQUIRED"])
             if not snapshots and private:
                 statuses.append("RESEARCH_BLOCKED_BY_PRIVACY")
+            if provider_conflicts:
+                statuses.append("PROVIDER_CONFLICT")
+                statuses = [s for s in statuses if s != "VERIFIED_METADATA"]
         rows.append(
             {
                 "classification": level,
@@ -242,6 +328,20 @@ def verify_citations(document, cache: LocalResearchCache | None = None, *, extra
                 "statuses": list(dict.fromkeys(statuses)),
                 "checks": checks,
                 "mismatched_fields": sorted(set(mismatches)),
+                "provider_conflicts": provider_conflicts,
+                "preferred_providers": list(preferred) if preferred is not None else [],
+                "provider_type_suitability": "UNVERIFIED"
+                if unsuitable
+                else "WITHIN_CONFIGURED_SCOPE",
+                "fuzzy_candidates": fuzzy_candidates,
+                "existence": "IDENTIFIER_IN_LOCAL_SNAPSHOT" if snapshots else "NOT_FOUND_LOCALLY",
+                "metadata": "CONFLICT"
+                if provider_conflicts or mismatches
+                else "CANDIDATE"
+                if fuzzy or partial
+                else "EXACT_COMPARED_FIELDS"
+                if metadata
+                else "UNKNOWN",
                 "cited_in_extracted_text": any(matches(m, entry) for m in mentions),
                 "duplicate_candidate": duplicate_keys[entry.doi or _norm(entry.raw)] > 1,
                 "missing_fields": [k for k in ("author", "title", "year") if not getattr(entry, k)],
@@ -267,4 +367,5 @@ def verify_citations(document, cache: LocalResearchCache | None = None, *, extra
         "fabrication_inferred": False,
         "citation_style_coverage": "NUMERIC_SINGLE_AND_SIMPLE_AUTHOR_YEAR",
         "semantic_verification": "NOT_PERFORMED",
+        "snapshot": cache.snapshot_info(),
     }

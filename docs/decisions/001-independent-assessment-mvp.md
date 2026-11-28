@@ -36,3 +36,14 @@ Tradeoff: coarse comparison labels cannot establish semantic agreement. Every
 criterion's original observations, rationale, evidence status and uncertainty are
 shown side by side. `HUMAN_ONLY`/`AI_ONLY` are reserved for future optional criteria;
 this MVP requires complete coverage on both sides and never creates those states.
+
+## Implementation follow-up, 2026-11-28
+
+The original factory/cross-review limitation above describes the 2026-11-26 decision
+baseline. The current assessment reuses the guarded Factory/Registry/ExecutionEngine,
+mandatory coverage, semantic specialist planning and bounded adversarial review.
+The current API also admits registered reviewed-public/synthetic pilot PDFs under
+strict operator/catalog/model gates. Optional AI criteria have explicit execution states.
+Durable storage, real university identities and private work remain blocked.
+[Current delivery](../architecture/implementation_status.md) ·
+[Supported workflow](../architecture/assessment_mvp.md).

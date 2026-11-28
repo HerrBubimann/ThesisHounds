@@ -34,3 +34,12 @@ rate/size/time limits, sanitized audits and adversarial tests. Heuristic PII rem
 does not establish that queries are safe. No research capability is needed for core
 local assessment. Scoring awaits official catalogs/scales; no target-grade optimizer
 is introduced before defensible qualitative constraints have been agreed.
+
+## Implementation follow-up, 2026-11-28
+
+Public document-derived runtime research remains closed. Independently reviewed public
+metadata can now be imported through offline adapters, versioned SQLite/FTS5 stores
+and rights-reviewed RIS/CSL exports. A separate fixed-dataset sync process has no private
+store/query access. This is not the approved-query research service proposed above.
+A local approved PUBLIC pilot is implemented; UNIVERSITY_SECURE remains blocked.
+[Current boundaries](../research/local_scientific_infrastructure.md).

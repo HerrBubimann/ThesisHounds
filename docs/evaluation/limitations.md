@@ -1,5 +1,11 @@
 # Limitations and outstanding prerequisites
 
+Implementierungsabgleich 28.11.2026: Die Grundgrenzen bleiben bestehen. Ergänzt sind
+optionale freigabegebundene lokale Encoder, SQLite-/FTS5-Snapshots, CSL-/Sprachadapter,
+methoden-/kontextgebundene Gutachterwerkzeuge und die neue Streamlit-Oberfläche.
+Codepfad vorhanden ist nicht gleich Artefakt abgenommen oder fachliche Güte gemessen.
+Aktuelle vorhandene Software-/Docker-/Browsernachweise: [validation.md](../validation.md).
+
 ## Advanced Review, 27.11.2026
 
 Lokale Satz-/Kapitelretrievalheuristik mit Feature-Hash-Vektoren ist implementiert;
@@ -8,7 +14,7 @@ passende Zitate und Modellkonsens beweisen keine fachliche Beziehung oder Abwese
 Pseudonymisierung betrifft nur explizite Header und schützt nicht vor Reidentifikation.
 Adaptive Eskalationsregeln sind transparent, aber noch nicht fachlich kalibriert.
 Mock-Fairness und Komponentenablation prüfen Software, keine tatsächliche Modellgüte.
-Neue Ergebnisse: [Advanced Review](advanced_review_results.md).
+Historischer Checkpoint: [Advanced Review](advanced_review_results.md).
 
 Mit dem Professor zu klären: freizugebender Kriterien-/Jahrgangsstand und kritische
 Befundarten; Referenzpassagen und Expertenadjudikation; erlaubte Identitätsmaskierung;

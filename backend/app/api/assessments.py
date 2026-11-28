@@ -1,9 +1,11 @@
 """Explicit projections prevent independent review contents leaking through status APIs."""
 
-from typing import Annotated
+import hashlib
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.assessments.schemas import (
     AcademicDecision,
@@ -14,9 +16,12 @@ from app.assessments.schemas import (
     ExplicitRelease,
     FindingFeedback,
     HumanReviewSubmission,
+    MethodConfirmation,
+    ReviewerNote,
+    ReviewerTimeAction,
 )
 from app.llm.errors import LLMError
-from app.services.document_store import pilot_documents
+from app.services.document_store import checked_pilot_root, load_pilot_document, pilot_documents
 from app.workflows.assessment_workflow import AssessmentWorkflow
 
 router = APIRouter(prefix="/api/v1/assessments", tags=["Synthetic assessment MVP"])
@@ -27,6 +32,44 @@ def get_assessments(request: Request) -> AssessmentWorkflow:
 
 
 Dependency = Annotated[AssessmentWorkflow, Depends(get_assessments)]
+
+
+class RulesPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    program: Literal["data_science_ai", "wirtschaftsinformatik"]
+    cohort: str = Field(pattern=r"^(DS|WI)(23|24|25)$")
+    work_type: Literal["PA1", "PA2", "BA"]
+
+
+@router.get("")
+async def listing(service: Dependency):
+    """ACL-filtered metadata only, including while independent contents are embargoed."""
+    service.cleanup()
+    rows = []
+    fields = (
+        "id",
+        "state",
+        "created_at",
+        "updated_at",
+        "work_type",
+        "document_id",
+        "program",
+        "cohort",
+        "classification",
+        "human_completed",
+        "ai_state",
+        "ai_released",
+    )
+    for key in list(service.records):
+        if service.access.allows(key):
+            row = service.status(key, include_analysis=False)
+            rows.append({name: row[name] for name in fields})
+    return sorted(rows, key=lambda row: row["created_at"], reverse=True)
+
+
+@router.post("/rules-preview")
+async def rules_preview(payload: RulesPreview, service: Dependency):
+    return service.academic.rules(payload.program, payload.cohort, payload.work_type)
 
 
 @router.get("/pilot-documents")
@@ -64,6 +107,31 @@ async def status(assessment_id: UUID, service: Dependency):
 async def document(assessment_id: UUID, service: Dependency):
     # Only the fixed synthetic fixture can be created by the assessment API.
     return service.get(str(assessment_id)).document.model_dump()
+
+
+@router.get("/{assessment_id}/original-pdf", response_class=Response)
+async def original_pdf(assessment_id: UUID, service: Dependency):
+    record = service.get(str(assessment_id))
+    document = record.document
+    if not document.source_sha256 or not service.settings.pilot_document_dir:
+        raise LLMError(404, "ORIGINAL_PDF_NOT_AVAILABLE")
+    try:
+        root = checked_pilot_root(service.settings.pilot_document_dir)
+        verified = load_pilot_document(root, document.document_id, record.id)
+        # No PDF links, scripts or other suspicious objects reach the browser renderer.
+        # No client-controlled filename, URL, classification or approval is accepted.
+        if verified != document or verified.security_inspection.get("indicators"):
+            raise ValueError("PDF_PREVIEW_REQUIRES_TEXT_FALLBACK")
+        data = (root / (verified.source_sha256 + ".pdf")).read_bytes()
+        if len(data) > 8_000_000 or hashlib.sha256(data).hexdigest() != document.source_sha256:
+            raise ValueError("PDF_CHANGED")
+    except (OSError, ValueError, KeyError, TypeError):
+        raise LLMError(403, "ORIGINAL_PDF_NOT_CLEARED_FOR_PREVIEW") from None
+    return Response(
+        data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="review-document.pdf"'},
+    )
 
 
 @router.get("/{assessment_id}/academic-checks")
@@ -104,6 +172,21 @@ async def provenance(assessment_id: UUID, service: Dependency):
 @router.post("/{assessment_id}/finding-feedback")
 async def finding_feedback(assessment_id: UUID, payload: FindingFeedback, service: Dependency):
     return service.feedback(str(assessment_id), payload)
+
+
+@router.post("/{assessment_id}/reviewer-notes")
+async def reviewer_notes(assessment_id: UUID, payload: ReviewerNote, service: Dependency):
+    return service.reviewer_note(str(assessment_id), payload)
+
+
+@router.post("/{assessment_id}/review-methods")
+async def review_methods(assessment_id: UUID, payload: MethodConfirmation, service: Dependency):
+    return service.confirm_method(str(assessment_id), payload)
+
+
+@router.post("/{assessment_id}/reviewer-time")
+async def reviewer_time(assessment_id: UUID, payload: ReviewerTimeAction, service: Dependency):
+    return service.reviewer_time(str(assessment_id), payload)
 
 
 @router.get("/{assessment_id}/document-security")

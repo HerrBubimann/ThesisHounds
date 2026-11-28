@@ -1,4 +1,7 @@
-# Lokaler PDF-Eingang, 27.11.2026
+# Lokaler PDF-Eingang und Originalansicht
+
+Implementierungsabgleich 28.11.2026. Die ursprünglichen Worker-/Parsergrenzen vom
+27.11.2026 bleiben bestehen; die neue Browseransicht ersetzt keine Sicherheitsprüfung.
 
 `backend/app/services/pdf_security.py` und `pdf_worker.py` bilden den gemeinsamen
 PDF-Pfad für kontrollierte PUBLIC-Pilotdokumente und Knowledge-Kandidaten. Sie
@@ -39,7 +42,7 @@ ausstehende Worker-/Zielhostgrenze nicht. Daher keine Freigabe privater Dateien.
 ### Original und Belegkette
 
 `services/document_store.py` speichert akzeptierte Originalbytes unverändert,
-UUID, SHA-256, Dokument-/Extraktionsversion, Importzeitpunkt, tatsächliche
+SHA-256-gebundene Pilot-ID, Dokument-/Extraktionsversion, Importzeitpunkt, tatsächliche
 pypdf-Version und `secure-pdf-preflight.v1`-Inspektion. Text- und
 Inspektionshash gehen in `assessments/provenance.py` ein und werden erneut
 geprüft. Abgelehnte aktive/verschlüsselte Dateien werden nicht als registrierte
@@ -61,7 +64,7 @@ ausdrücklich **nicht** geprüften weißen Hintergrund; Clipping beweist keine
 Unsichtbarkeit. Mehrspaltigkeit, Transformationen, Formulare und komplexe PDFs
 können Koordinaten verfälschen. Normale Schrift/Metadaten haben Negativkontrollen.
 
-Rendering, Hintergrundrekonstruktion, OCR-Mismatch und Anweisungen in Bildern
+Serverseitiger Sicherheits-Rastervergleich, Hintergrundrekonstruktion, OCR-Mismatch und Anweisungen in Bildern
 sind `NOT_IMPLEMENTED`. Befunde bleiben Verdachtsindikatoren. Es gibt keinen
 Dual-Extraction-Erfolg oder visuell geprüften Rastervergleich.
 
@@ -76,11 +79,27 @@ Dual-Extraction-Erfolg oder visuell geprüften Rastervergleich.
 | Tesseract / lokale Malwareprüfung | mögliche weitere lokale Prüfschichten | Tesseract/ClamAV nicht vorhanden, keine Ausführung oder Scanfreigabe; keine Cloudscanner verwenden |
 
 Zusätzliche Werkzeuge erst nach Lizenz-/Dependencyprüfung und isoliertem Lauf
-einführen. Keine Pakete, Locks oder Modellartefakte wurden hierfür ergänzt.
+einführen. Für diese zusätzlichen Sicherheits-/OCR-Schichten wurden keine neuen
+Parser-/Modellpakete freigegeben. Davon getrennt ist der lokale PDF-Viewer unten.
 [OWASP File Upload](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)
 begründet die Kombination aus Inhaltsprüfung, Größenlimit und getrennter
 Verarbeitung, stellt selbst aber keinen projektspezifischen Sicherheitsnachweis dar.
 
 Tests: `tests/security/test_secure_document_gateway.py`,
 `tests/security/test_pilot_boundaries.py`, `tests/unit/test_knowledge_import.py`.
-Die exakten ausgeführten Suitezahlen stehen im [Prüfprotokoll](../evaluation/security_results.md).
+Die historischen Worker-Suitezahlen stehen im [Prüfprotokoll](../evaluation/security_results.md),
+der aktuelle vorhandene Gesamtnachweis in [validation.md](../validation.md).
+
+## Geschützter Browserviewer
+
+`GET /api/v1/assessments/{id}/original-pdf` verlangt Objektzugriff, registrierte
+PUBLIC-Herkunft, passende Dokument-/Inspektionsversion, unveränderte Originalbytes
+und erneut geprüften SHA-256. Dateien mit Sicherheitsindikatoren bleiben für die
+Browservorschau gesperrt. Synthetische Textfixtures besitzen kein Original-PDF.
+
+Der gepinnte Frontendclient prüft MIME, Signatur und Antwortgrenze. `st.pdf` nutzt
+`streamlit-pdf==2.1.0` mit lokal gebündelten Assets/Worker/Fonts. Das ist eine
+Originalansicht, kein unabhängiger serverseitiger Rendering-/OCR-Sicherheitsvergleich.
+Zitat-/Textoffsets und PDF-Seiten werden getrennt angezeigt; bestätigte visuelle
+Highlightkoordinaten fehlen. Browsernachweis mit generierter Datei und tatsächlichem
+Canvas: [Frontendprüfung](../frontend/testing.md).

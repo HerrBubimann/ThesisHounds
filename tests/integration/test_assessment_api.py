@@ -49,6 +49,7 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         client.portal.call(wait)
         assert client.post(path + "/ai-review").status_code == 409
         assert client.get(path).json()["ai_state"] == "COMPLETED"
+        assert "combined_result" not in client.get(path).json()
         # Sweep every old generic list/status/output route for a disclosure bypass.
         for route in [path, "/api/v1/runs", "/api/v1/agents", "/api/v1/system/resources"]:
             content = client.get(route).text
@@ -73,6 +74,13 @@ def test_independent_reviews_comparison_discussion_and_finalization(tmp_path, hu
         assert client.get(path + "/comparison").status_code == 409
         assert client.post(path + "/release", json={"confirmed": True}).status_code == 200
         before = client.get(path + "/comparison").json()
+        combined = before["combined_result"]
+        assert combined["status"] == "HUMAN_REVIEW_REQUIRED"
+        assert combined["execution_complete"] is True
+        assert not combined["automatic_grade_effect"]
+        assert combined["analysis_id"] == key
+        assert before["retrieval_comparison"]["fts_index_builds"] == 1
+        assert len(combined["checks"]) == 6
         assert all(row["status"] == "AGREEMENT" for row in before["criteria"])
         assert client.post(path + "/human-review", json=human).status_code == 409
         assert client.get(path + "/draft").status_code == 409

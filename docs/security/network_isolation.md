@@ -64,5 +64,11 @@ bis zur Implementierung und Abnahme der fehlenden Adapter den Start.
    Nur kontrollierte Testziele und synthetische Marker verwenden. UI-Browser
    einschließlich Webfonts, WebSocket und Cache im echten Browser untersuchen.
 
-Aktueller Status und tatsächliche Ausführung stehen in `privacy_test_results.md`.
+Der öffentliche Metadaten-Sync hat ein eigenes Compose-Projekt ohne private Netze
+oder Dokumentmounts. Dessen festes Datensatz- und Hashverfahren erlaubt keine aus
+privaten Arbeiten abgeleiteten Abfragen. Der Transport benötigt eine getrennte
+Zielhost-/Egressabnahme; die sieben Composevarianten sind statisch geprüft.
+
+Aktueller vorhandener lokaler Nachweis: [validation.md](../validation.md).
+Historische Netzproben stehen in `privacy_test_results.md`.
 Eine Config-Prüfung oder CI-Probe ersetzt keine Hochschulnetzabnahme.

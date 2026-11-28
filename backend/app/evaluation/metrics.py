@@ -6,7 +6,7 @@ import re
 from itertools import combinations
 
 from app.schemas.domain import StrictModel
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, model_validator
 
 
 def digest(value) -> str:
@@ -15,12 +15,82 @@ def digest(value) -> str:
     ).hexdigest()
 
 
+def feedback_codes(action, reason):
+    outcome = {
+        "ACCEPT": "ACCEPTED",
+        "REJECT": "REJECTED",
+        "CORRECT": "CORRECTED",
+        "SUPPLEMENT": "SUPPLEMENTED",
+        "NOT_RELEVANT": "REJECTED",
+        "INSUFFICIENT_EVIDENCE": "INSUFFICIENT_EVIDENCE",
+        "MANUAL_REVIEW_REQUIRED": "MANUAL_REVIEW_REQUIRED",
+    }[action]
+    error = {
+        "WRONG_STATEMENT": "FACTUAL_ERROR",
+        "WRONG_CRITERION": "INCORRECT_CRITERION",
+        "DUPLICATE": "DUPLICATE_FINDING",
+    }.get(reason, reason)
+    return {"outcome": outcome, "error_category": error}
+
+
+def feedback_metrics(entries, findings):
+    """Latest local human feedback per finding; version counts are reported separately.
+
+    No cross-assessment export, model reconfiguration, gold-label promotion or training.
+    """
+    from collections import Counter
+
+    catalog = {f.finding_id: f for primary in findings for f in [primary, *primary.supplemental]}
+    latest = {e["finding_id"]: e for e in entries}
+    groups = {}
+    for key, e in latest.items():
+        if key not in catalog:
+            raise ValueError("Feedback refers to an unknown finding")
+        f = catalog[key]
+        codes = feedback_codes(e["action"], e["reason"])
+        group = (f.model_id, f.agent_id, f.criterion_id, codes["error_category"])
+        groups.setdefault(group, Counter())[codes["outcome"]] += 1
+    return {
+        "groups": [
+            {
+                "model_id": model,
+                "agent_id": agent,
+                "criterion_id": criterion,
+                "error_category": error,
+                "outcomes": dict(counts),
+                "findings": sum(counts.values()),
+            }
+            for (model, agent, criterion, error), counts in groups.items()
+        ],
+        "feedback_versions": len(entries),
+        "adjudicated_findings": len(latest),
+        "pending_findings": len(set(catalog) - latest.keys()),
+        "classification": "RESTRICTED",
+        "origin": "HUMAN_CONFIRMED",
+        "scope": "CURRENT_ASSESSMENT_ONLY",
+        "automatic_training": False,
+        "automatic_model_routing_changes": False,
+        "quality_benefit": "NOT_ESTABLISHED_BY_FEEDBACK_COUNTS",
+    }
+
+
 def fingerprint(finding) -> str:
     value = finding.model_dump() if hasattr(finding, "model_dump") else finding
     return digest(
         {
             k: re.sub(r"\s+", " ", value[k]).strip() if isinstance(value[k], str) else value[k]
-            for k in ("criterion_id", "judgment", "kind", "description", "page", "quote")
+            for k in (
+                "criterion_id",
+                "judgment",
+                "kind",
+                "description",
+                "page",
+                "quote",
+                "scientific_claims",
+                "relationships",
+                "supporting_passages",
+            )
+            if k in value
         }
     )
 
@@ -31,6 +101,10 @@ class Adjudication(StrictModel):
     matched_reference_ids: list[str] = Field(default_factory=list)
     hallucinated: bool
     source_correct: bool | None = None
+    claim_correct: bool | None = None
+    methodological_weakness_correct: bool | None = None
+    propagated_error: bool | None = None
+    reviewer_accepted: bool | None = None
 
 
 class SpecialistAdjudication(StrictModel):
@@ -45,6 +119,7 @@ class HumanReferenceSet(StrictModel):
     adjudicated_by: list[str] = Field(min_length=1, max_length=10)
     reference_ids: list[str]
     adjudications: list[Adjudication]
+    review_tool_adjudications: dict[str, StrictBool] = Field(default_factory=dict, max_length=2000)
     required_specialist_ids: list[str] | None = None
     specialist_adjudications: list[SpecialistAdjudication] = Field(
         default_factory=list, max_length=100
@@ -74,6 +149,101 @@ class HumanReferenceSet(StrictModel):
         if any(a.matched_reference_ids and not a.correct for a in self.adjudications):
             raise ValueError("An incorrect prediction cannot recover a reference finding")
         return self
+
+
+def review_tool_metrics(document, profile, findings, reference=None):
+    """No expert scores from keyword checks or duplicate counts; explicit labels only."""
+    from app.assessments.comparison import finding_groups, reviewer_questions
+    from app.assessments.routine_checks import numerical_consistency
+    from app.assessments.scientific_consistency import (
+        applied_method_candidates,
+        reproducibility_report,
+    )
+
+    groups = finding_groups(document, findings)
+    numerical = numerical_consistency(document)
+    reproduction = reproducibility_report(
+        document, profile, applied_method_candidates(document, profile, findings)
+    )
+    questions = reviewer_questions(document, profile, findings, reproduction, numerical)
+    flat = [f for primary in findings for f in [primary, *primary.supplemental]]
+    catalog = {f.finding_id: fingerprint(f) for f in flat}
+    predictions = {
+        "deduplication": [],
+        "numerical": [],
+        "reproducibility": [],
+        "questions": [],
+        "positive_evidence": [],
+        "negative_evidence": [],
+    }
+    for group in groups["groups"]:
+        if len(group["finding_ids"]) > 1:
+            predictions["deduplication"].append(
+                "dedup-" + digest(sorted(catalog[key] for key in group["finding_ids"]))
+            )
+    for row in numerical["arithmetic"]:
+        if row["status"] == "ARITHMETIC_MISMATCH_CANDIDATE":
+            predictions["numerical"].append(
+                "numeric-" + digest([row["page"], row["quote"], row["calculated_percent"]])
+            )
+    for row in numerical["comparisons"]:
+        if row["status"] == "NUMERIC_CONFLICT_CANDIDATE":
+            predictions["numerical"].append(
+                "numeric-" + digest([row["first_id"], row["second_id"]])
+            )
+    for method in reproduction["methods"]:
+        for check in method["checks"]:
+            if check["status"] == "NOT_LOCATED_IN_METHOD_CONTEXT":
+                predictions["reproducibility"].append(
+                    "repro-"
+                    + digest(
+                        [
+                            method["criterion_id"],
+                            method["family"],
+                            check["aspect"],
+                            method["evidence"],
+                        ]
+                    )
+                )
+    for q in questions:
+        predictions["questions"].append(
+            "question-" + digest([q["criterion_id"], q["reason"], q["text"], q["passages"]])
+        )
+    for f in flat:
+        if f.kind in {"STRENGTH", "WEAKNESS", "METHOD_CONCERN"}:
+            key = "positive_evidence" if f.kind == "STRENGTH" else "negative_evidence"
+            predictions[key].append("finding-" + fingerprint(f))
+    result = {
+        "findings_before": groups["findings_before"],
+        "candidate_groups_after": groups["candidate_groups_after"],
+        "redundancy_candidates": groups["redundancy_candidates"],
+        "deleted_findings": 0,
+        "prediction_ids": predictions,
+        "quality": {key: None for key in predictions},
+        "reference_status": "NO_EXPERT_REFERENCES",
+        "human_time_saved_seconds": None,
+        "reviewer_acceptance": None,
+        "mechanical_reduction_is_quality_gain": False,
+    }
+    if reference is None:
+        return result
+    reference = HumanReferenceSet.model_validate(reference.model_dump())
+    if (reference.dataset_sha256, reference.profile_sha256) != (
+        digest(document.pages),
+        digest(profile.model_dump()),
+    ):
+        return {**result, "reference_status": "REFERENCE_SCOPE_MISMATCH"}
+    labels = reference.review_tool_adjudications
+    complete = True
+    for key, ids in predictions.items():
+        if ids and set(ids) <= labels.keys():
+            result["quality"][key] = sum(labels[item] for item in ids) / len(ids)
+        elif ids:
+            complete = False
+    result["reference_status"] = (
+        "EXPLICIT_EXPERT_ADJUDICATION" if complete and labels else "INCOMPLETE_EXPERT_ADJUDICATION"
+    )
+    return result
 
 
 def planning_metrics(planning, reference):
@@ -115,6 +285,11 @@ def quality_metrics(
             "false_negatives",
             "hallucination_rate",
             "source_correctness",
+            "scientific_claim_correctness",
+            "methodological_weakness_correctness",
+            "error_propagation_rate",
+            "reviewer_acceptance",
+            "human_time_saved_seconds",
         )
     )
     if reference is None:
@@ -127,6 +302,11 @@ def quality_metrics(
     values = [annotations[fingerprint(f)] for f in findings]
     recovered = set().union(*(set(a.matched_reference_ids) for a in values)) if values else set()
     sources = [a.source_correct for a in values if a.source_correct is not None]
+
+    def annotated_rate(field):
+        labels = [getattr(a, field) for a in values if getattr(a, field) is not None]
+        return sum(labels) / len(labels) if labels else None
+
     return {
         "precision": sum(a.correct for a in values) / len(values) if values else None,
         "recall": len(recovered) / len(reference.reference_ids)
@@ -140,6 +320,20 @@ def quality_metrics(
         "hallucination_rate": sum(a.hallucinated for a in values) / len(values) if values else None,
         "source_correctness": sum(sources) / len(sources) if sources else None,
         "reference_status": "HUMAN_ADJUDICATED",
+        "scientific_claim_correctness": annotated_rate("claim_correct"),
+        "methodological_weakness_correctness": annotated_rate("methodological_weakness_correct"),
+        "error_propagation_rate": annotated_rate("propagated_error"),
+        "reviewer_acceptance": annotated_rate("reviewer_accepted"),
+        "human_time_saved_seconds": None,
+        "annotation_counts": {
+            field: sum(getattr(a, field) is not None for a in values)
+            for field in (
+                "claim_correct",
+                "methodological_weakness_correct",
+                "propagated_error",
+                "reviewer_accepted",
+            )
+        },
     }
 
 
@@ -290,6 +484,8 @@ def ablation_comparisons(rows):
                 == (row["architecture"], row["variation"], row["repeat"], "baseline", "COMPLETED")
                 and b.get("planning_variant") == row.get("planning_variant")
                 and b.get("document_id") == row.get("document_id")
+                and b["dataset_sha256"] == row["dataset_sha256"]
+                and b["profile_sha256"] == row["profile_sha256"]
             ),
             None,
         )

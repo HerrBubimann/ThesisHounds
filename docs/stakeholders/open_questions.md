@@ -1,6 +1,6 @@
 # Questions for Herrn Sturm and other reviewers
 
-Status: open as of 2026-11-26. No answer or approval has been inferred. Suggested
+Documentation reviewed 2026-11-28; the questions originally recorded on 2026-11-26 remain open in the available evidence. No answer or approval has been inferred. Suggested
 decision owners are roles to confirm during the meeting.
 
 | Topic | Questions / requested material | Proposed owner |

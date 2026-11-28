@@ -206,3 +206,5 @@ def test_only_actually_checked_local_sources_enter_research_provenance(tmp_path)
         assert value["research_sources"][0]["snapshot_sha256"] == "a" * 64
         assert value["research_sources"][0]["checked_at"]
         assert not value["current_document_matches_snapshot"]
+        assert value["combined_result"]["status"] == "STALE_REQUIRES_NEW_REVIEW"
+        assert client.get(path + "/draft").status_code == 409

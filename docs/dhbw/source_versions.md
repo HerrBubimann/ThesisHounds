@@ -1,6 +1,6 @@
-# Quellenst?nde und SHA-256
+# Quellenstände und SHA-256
 
-?ffentliche Abrufe am 26.11.2026 UTC. Die Archive und extrahierten Originaltexte liegen nur im ignorierten lokalen Arbeitsverzeichnis; sie werden nicht als Repository-Dokumente ausgeliefert. Freigabe/G?ltigkeit bleiben unbest?tigt.
+Öffentliche Abrufe am 26.11.2026 UTC. Die Archive und extrahierten Originaltexte liegen nur im ignorierten lokalen Arbeitsverzeichnis; sie werden nicht als Repository-Dokumente ausgeliefert. Freigabe/Gültigkeit bleiben unbestätigt.
 
 | Quelle | Original-URL | SHA-256 / Befund |
 |---|---|---|
@@ -11,13 +11,13 @@
 | faculty-5-0 | [Original](https://www.mosbach.dhbw.de/fileadmin/user_upload/dhbw/ressorts/esc/Lehrende/Richtlinien_Version2023-07-18.pdf) | HTTPError |
 | confidentiality-may-2026 | [Original](https://www.dhbw.de/fileadmin/user_upload/Dokumente/Qualitaetsmanagement/Infoblatt_Vertraulichkeit.pdf) | 7d0128920e3c8e0828b932d4d895c03127f4e8490f3656c3f1951b1cedb11639 |
 
-## Vollst?ndiges ?ffentliches Paketinventar
+## Vollständiges öffentliches Paketinventar
 
-Alle unten aufgef?hrten PDFs und Word-Dateien wurden lokal textuell untersucht. Dokumente mit identischen Bytes bleiben ?ber denselben Hash erkennbar. Die Dateinamen sind ?ffentliche Hochschulvorlagen, keine Namen vertraulicher Arbeiten.
+Alle unten aufgeführten PDFs und Word-Dateien wurden lokal textuell untersucht. Dokumente mit identischen Bytes bleiben über denselben Hash erkennbar. Die Dateinamen sind öffentliche Hochschulvorlagen, keine Namen vertraulicher Arbeiten.
 
 ### ba-ds23
 
-| ?ffentliches Mitglied | Bytes | SHA-256 |
+| Öffentliches Mitglied | Bytes | SHA-256 |
 |---|---:|---|
 | BacArbeitenTermineInfos.pdf | 360672 | 8bf2830653a2f28f70a4d4237e1940557caf4d961882cc2bb099519d20edbc58 |
 | Aufsetzen einer LateX-Umgebung.pdf | 105831 | d84132988a1061c663956d90c1c40abf2d570e301a3c8d0d67709be49ebeb2b0 |
@@ -28,7 +28,7 @@ Alle unten aufgef?hrten PDFs und Word-Dateien wurden lokal textuell untersucht. 
 
 ### pa2-ds24
 
-| ?ffentliches Mitglied | Bytes | SHA-256 |
+| Öffentliches Mitglied | Bytes | SHA-256 |
 |---|---:|---|
 | ProjektarbeitenTermineInfos_PA2.pdf | 297533 | 91c7e5078ece3839fd939c4ce002440620ac2fc5314bd5afe43d9473123e2f52 |
 | Aufsetzen einer LateX-Umgebung.pdf | 105831 | d84132988a1061c663956d90c1c40abf2d570e301a3c8d0d67709be49ebeb2b0 |
@@ -39,7 +39,7 @@ Alle unten aufgef?hrten PDFs und Word-Dateien wurden lokal textuell untersucht. 
 
 ### pa1-ds25
 
-| ?ffentliches Mitglied | Bytes | SHA-256 |
+| Öffentliches Mitglied | Bytes | SHA-256 |
 |---|---:|---|
 | ProjektarbeitenTermineInfos_PA1.pdf | 294141 | 5c81233e4a91722fec7736e235c8d6052fb390ab430b29d4a226ba99febea622 |
 | Aufsetzen einer LateX-Umgebung.pdf | 105831 | d84132988a1061c663956d90c1c40abf2d570e301a3c8d0d67709be49ebeb2b0 |
@@ -50,8 +50,14 @@ Alle unten aufgef?hrten PDFs und Word-Dateien wurden lokal textuell untersucht. 
 
 ## Fehlende Verbindlichkeit
 
-Die im Webwerkzeug gelesene Fakult?tsfassung 5.0 vom 18.07.2023 ist nicht byteweise gehasht: der direkte Download scheiterte. Es wird kein Hash aus einer Webtextdarstellung als Originaldateihash ausgegeben. Box/Palleduhn ist noch nicht verf?gbar; weder Version noch Hash werden erfunden.
+Dokumentationsabgleich 28.11.2026: Dies ist das historische Quelleninventar der
+oben datierten Abrufe. Originalhashes wurden unverändert erhalten; aktuelle externe
+Erreichbarkeit und unveränderte Bytes wurden in dieser Dokumentationspflege nicht
+erneut geprüft. Die Einträge ersetzen keine institutionelle Freigabe.
 
-Die Studiengangsseite verweist auf das aktuelle Rahmenplan-PDF (Dateiname 26-09-21), Kurzbeschreibung (2025-04-07) und das DS/KI-Modulhandbuch. Diese wurden im Webwerkzeug ge?ffnet, nicht als aktive Bewertungskataloge importiert. Ebenso wurden die StuPrO-Wirtschaft-Ausgabe 26/2026 und allgemeine StuPrO 21/2025 eingesehen; ihre kohortenspezifische Anwendbarkeit ist nicht best?tigt.
 
-Keine dieser Quellen ist durch den Coding-Agenten als institutionell APPROVED markiert. Separate menschliche Nachweise m?ssen die konkrete Version, Originalbytes und Anwendbarkeit binden.
+Die im Webwerkzeug gelesene Fakultätsfassung 5.0 vom 18.07.2023 ist nicht byteweise gehasht: der direkte Download scheiterte. Es wird kein Hash aus einer Webtextdarstellung als Originaldateihash ausgegeben. Box/Palleduhn ist noch nicht verfügbar; weder Version noch Hash werden erfunden.
+
+Die Studiengangsseite verweist auf das aktuelle Rahmenplan-PDF (Dateiname 26-09-21), Kurzbeschreibung (2025-04-07) und das DS/KI-Modulhandbuch. Diese wurden im Webwerkzeug geöffnet, nicht als aktive Bewertungskataloge importiert. Ebenso wurden die StuPrO-Wirtschaft-Ausgabe 26/2026 und allgemeine StuPrO 21/2025 eingesehen; ihre kohortenspezifische Anwendbarkeit ist nicht bestätigt.
+
+Keine dieser Quellen ist durch den Coding-Agenten als institutionell APPROVED markiert. Separate menschliche Nachweise müssen die konkrete Version, Originalbytes und Anwendbarkeit binden.

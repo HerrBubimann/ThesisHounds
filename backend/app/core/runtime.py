@@ -9,7 +9,7 @@ from app.core.orchestrator import MasterOrchestrator
 from app.llm.errors import LLMError
 from app.llm.gateway import CallBudget, LLMGateway
 from app.llm.providers.base import LLMProvider
-from app.monitoring.resources import sample_resources
+from app.monitoring.resources import loaded_vram_bytes, sample_resources
 from app.schemas.domain import AgentStatus, Finding, HumanReview, RunRecord, RunRequest, now
 from app.security.access_control import AccessControl
 from app.security.audit_service import AuditEvent, AuditService
@@ -176,7 +176,7 @@ class AnalysisRuntime:
             sample = sample_resources()
             try:
                 loaded = (await self.provider.resources())["loaded_models"]
-                sample["model_vram_bytes"] = sum(m["vram_bytes"] for m in loaded)
+                sample["model_vram_bytes"] = loaded_vram_bytes(loaded)
             except LLMError:
                 sample["model_vram_bytes"] = None
             run.resource_samples.append(sample)

@@ -1,5 +1,9 @@
 # Document Security: ausgeführte Prüfungen am 27.11.2026
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 Geprüft wurde der lokale Arbeitsbaum unter Windows mit Python 3.12.6 und pypdf
 7.2.0. Kein Git-Commitbezug: Git steht hier nicht als ausführbares Programm zur
 Verfügung. Keine neue Modell-/Hochschul-/Datenschutzfreigabe. Original-PowerPoint

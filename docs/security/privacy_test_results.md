@@ -1,5 +1,9 @@
 # Privacy test results
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 **Aktueller Nachweisstand:** [Advanced Review vom 27.11.2026](../evaluation/advanced_review_results.md).
 Die folgenden Zahlen sind historisch und keine aktuelle Hochschulabnahme.
 

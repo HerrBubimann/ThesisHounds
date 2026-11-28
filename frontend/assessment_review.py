@@ -5,6 +5,8 @@ import json
 import streamlit as st
 
 from frontend.api_client import BackendError, request_backend
+from frontend.design import assessment_phase
+from frontend.evidence import review_explorer
 
 BASE = "/api/v1/assessments"
 
@@ -16,87 +18,45 @@ def render_assessment_review():
     )
     try:
         if "assessment_id" not in st.session_state:
-            if st.button("Kontrollierte Pilotdatei auswählen"):
-                st.session_state.pilot_catalog = request_backend("GET", BASE + "/pilot-documents")
-                st.rerun()
-            pilot = st.session_state.get("pilot_catalog", {})
-            selected_document = "synthetic-demo"
-            if pilot:
-                documents = pilot.get("documents", [])
-                if not documents or not pilot.get("profile_id"):
-                    st.info("Geprüfte Pilotdateien oder bestätigter Experimentkatalog fehlen.")
-                    return
-                selected_document = st.selectbox(
-                    "Geprüfte Test-PDF", [d["document_id"] for d in documents]
-                )
-                st.caption("Operatorgeprüfte Datei; keine Freigabe vertraulicher Arbeiten.")
-            work_type = st.selectbox("Arbeitstyp", ["PA1"] if pilot else ["PA1", "PA2", "BA"])
-            program = st.selectbox(
-                "Studiengang",
-                ["data_science_ai"] if pilot else ["data_science_ai", "wirtschaftsinformatik"],
-                format_func=lambda value: (
-                    "Data Science und KI" if value == "data_science_ai" else "Wirtschaftsinformatik"
-                ),
-            )
-            cohort = st.selectbox(
-                "Jahrgang für die Richtlinienvorschau",
-                ["DS23", "DS24", "DS25"]
-                if program == "data_science_ai"
-                else ["WI23", "WI24", "WI25"],
-                index=None,
-            )
-            if st.button(
-                "Pilotbegutachtung anlegen" if pilot else "Synthetische Begutachtung anlegen"
-            ):
-                record = request_backend(
-                    "POST",
-                    BASE,
-                    json={
-                        "work_type": work_type,
-                        "profile_id": pilot["profile_id"]
-                        if pilot
-                        else work_type.lower() + "-example",
-                        "document_id": selected_document,
-                        "program": program,
-                        "cohort": cohort,
-                    },
-                )
-                st.session_state.assessment_id = record["id"]
-                st.rerun()
+            from frontend.pages import creation_wizard
+
+            creation_wizard()
             return
         path = f"{BASE}/{st.session_state.assessment_id}"
         record = request_backend("GET", path)
+        assessment_phase(record)
         pilot_document = record.get("document_id", "synthetic-demo") != "synthetic-demo"
         real_mode = record.get("security", {}).get("inference") == "LOCAL_OLLAMA_PILOT"
-        st.caption(f"{record['state']} · Infrastruktur: {record['deployment_mode']}")
-        st.caption(
-            f"Schutzklasse: {record.get('classification', 'RESTRICTED')} · "
-            f"Sperrvermerk erkannt: {record.get('sperrvermerk_detected', False)} · "
-            "Zugriff: synthetische Einzelsitzung · Speicherung: zeitlich begrenzt"
-        )
-        st.caption(
-            f"Dokument: {record.get('document_classification', 'PUBLIC')} "
-            + (
-                "(operatorgeprüfte Pilot-PDF)"
-                if pilot_document
-                else "(servereigene synthetische Fixture)"
+        with st.expander("Betriebsmodus, Dokument und Datenschutz"):
+            st.caption(f"{record['state']} · Infrastruktur: {record['deployment_mode']}")
+            st.caption(
+                f"Schutzklasse: {record.get('classification', 'RESTRICTED')} · "
+                f"Sperrvermerk erkannt: {record.get('sperrvermerk_detected', False)} · "
+                "Zugriff: gemeinsame synthetische Demo-Identit?t · Speicherung: zeitlich begrenzt"
             )
-        )
-        st.write("Öffentliche Recherche: deaktiviert · KI-Punktevergabe: deaktiviert")
-        security = record.get("security", {})
-        st.caption(
-            (
-                "Autorisierte lokale Modellkennungen: "
-                if real_mode
-                else "Autorisierte Mock-Modellkennungen: "
+            st.caption(
+                f"Dokument: {record.get('document_classification', 'PUBLIC')} "
+                + (
+                    "(operatorgeprüfte Pilot-PDF)"
+                    if pilot_document
+                    else "(servereigene synthetische Fixture)"
+                )
             )
-            + ", ".join(security.get("authorized_demo_models", []))
-        )
-        st.caption(
-            f"Modus: {security.get('mode', 'DEVELOPMENT')} · "
-            f"Inferenz: {security.get('endpoint', 'in-process://demo')} · "
-            "Lokal importierte öffentliche Metadaten · Hochschulfreigabe ausstehend"
-        )
+            st.write("Öffentliche Recherche: deaktiviert · KI-Punktevergabe: deaktiviert")
+            security = record.get("security", {})
+            st.caption(
+                (
+                    "Autorisierte lokale Modellkennungen: "
+                    if real_mode
+                    else "Autorisierte Mock-Modellkennungen: "
+                )
+                + ", ".join(security.get("authorized_demo_models", []))
+            )
+            st.caption(
+                f"Modus: {security.get('mode', 'DEVELOPMENT')} · "
+                f"Inferenz: {security.get('endpoint', 'in-process://demo')} · "
+                "Lokal importierte öffentliche Metadaten · Hochschulfreigabe ausstehend"
+            )
         if record.get("cohort"):
             render_rules(record.get("institutional_rules", {}))
         if record.get("human_completed"):
@@ -106,12 +66,11 @@ def render_assessment_review():
             if real_mode
             else "Inferenzmodus: Mock; keine reale Modellinferenz."
         )
-        with st.expander(
-            "Pilot-PDF lesen" if pilot_document else "Synthetisches Testdokument lesen"
-        ):
-            document = request_backend("GET", path + "/document")
-            for page, text in document["pages"].items():
-                st.text(f"Seite {page}: {text}")
+        if not record.get("ai_released"):
+            from frontend.evidence import document_reader
+
+            with st.expander("Dokument vor der unabhängigen Erstbewertung lesen"):
+                document_reader(path, record)
         if st.button("Begutachtungsstatus aktualisieren"):
             st.rerun()
         if st.button(
@@ -120,16 +79,41 @@ def render_assessment_review():
             del st.session_state.assessment_id
             st.session_state.pop("evidence_finding", None)
             st.rerun()
+        with st.expander("Begutachtung aus dem Backend löschen"):
+            st.caption(
+                "Entfernt diesen flüchtigen Fall und seine Bewertungen. "
+                "Der separat verwaltete öffentliche Pilotkatalog bleibt bestehen."
+            )
+            delete_confirmed = st.checkbox(
+                "Diesen Fall einschließlich Bewertungen löschen", key=path + "_delete"
+            )
+            if st.button("Begutachtung endgültig löschen", disabled=not delete_confirmed):
+                request_backend("DELETE", path)
+                for name in list(st.session_state):
+                    if name.startswith(path):
+                        del st.session_state[name]
+                st.session_state.pop("assessment_id", None)
+                st.session_state.pop("evidence_finding", None)
+                st.session_state.page = "Dashboard"
+                st.rerun()
         if record["state"] == "CANCELLED":
             st.info("Begutachtung abgebrochen.")
             return
-        if record["state"] not in {"FINALIZED", "FAILED"} and st.button("Begutachtung abbrechen"):
-            request_backend("POST", path + "/cancel")
-            st.rerun()
-        st.progress(
-            record["criteria_completed"] / record["criteria_total"],
-            text=f"KI-Bearbeitung: {record['ai_state']}",
-        )
+        if record["state"] not in {"FINALIZED", "FAILED"}:
+            with st.expander("Begutachtung abbrechen"):
+                confirmed_cancel = st.checkbox(
+                    "Die laufende Begutachtung wirklich abbrechen", key=path + "_cancel"
+                )
+                if st.button("Begutachtung abbrechen", disabled=not confirmed_cancel):
+                    request_backend("POST", path + "/cancel")
+                    st.rerun()
+        if record["ai_state"] == "RUNNING":
+            render_active_status(path)
+        else:
+            st.caption(
+                f"Abgeschlossene KI-Kriterien: {record['criteria_completed']} "
+                f"von {record['criteria_total']}. Ausführungsstand, keine Qualitätsbewertung."
+            )
         if record["ai_state"] == "PENDING" and st.button("Unabhängige KI-Bewertung starten"):
             request_backend("POST", path + "/ai-review")
             st.rerun()
@@ -159,13 +143,32 @@ def render_human(path, criteria):
     st.write("Menschliche Erstbewertung")
     st.caption("Alle Kriterien bearbeiten; bei fehlenden Informationen NOT_ASSESSABLE wählen.")
     uploaded = st.file_uploader(
-        "Optional: ausgefüllte strukturierte Erstbewertung (JSON)", type=["json"]
+        "Optional: ausgefüllte strukturierte Erstbewertung (JSON)",
+        type=["json"],
+        key=path + "_human_import",
     )
-    with st.form("independent_human_review"):
+    saved = st.session_state.get(path + "_human_draft", {})
+    st.caption(
+        "Entwurf nur in dieser Sitzung. Vor einem Seitenwechsel speichern;"
+        " kein automatischer Backend-Speicher. Beim Sitzungsverlust geht "
+        "der Entwurf verloren."
+    )
+    with st.form(path + "_independent_human_review"):
         rows = []
         for criterion in criteria:
             st.write(criterion["description"])
             key = f"{path}_{criterion['id']}"
+            previous = saved.get(criterion["id"], {})
+            for field, suffix in (
+                ("judgment", "judgment"),
+                ("observations", "observations"),
+                ("strengths", "strengths"),
+                ("weaknesses", "weaknesses"),
+                ("rationale", "rationale"),
+                ("open_questions", "questions"),
+            ):
+                if key + suffix not in st.session_state and previous.get(field) is not None:
+                    st.session_state[key + suffix] = previous[field]
             judgment = st.selectbox(
                 "Einschätzung",
                 ["POSITIVE", "MIXED", "NEGATIVE", "NOT_ASSESSABLE"],
@@ -183,7 +186,15 @@ def render_human(path, criteria):
                     "open_questions": st.text_area("Offene Fragen", key=key + "questions"),
                 }
             )
-        confirmed = st.checkbox("Ich schließe meine unabhängige Erstbewertung ausdrücklich ab.")
+        confirmed = st.checkbox(
+            "Ich schließe meine unabhängige Erstbewertung ausdrücklich ab.",
+            key=path + "_human_confirm",
+        )
+        if st.form_submit_button("Entwurf in Sitzung speichern"):
+            st.session_state[path + "_human_draft"] = {row["criterion_id"]: row for row in rows}
+            st.success(
+                "Entwurf in dieser Sitzung gespeichert. Noch keine Erstbewertung freigegeben."
+            )
         if st.form_submit_button("Erstbewertung unveränderlich freigeben"):
             if not confirmed:
                 st.warning("Ausdrückliche Freigabe erforderlich.")
@@ -197,43 +208,58 @@ def render_human(path, criteria):
                     st.error("Ungültiges JSON-Bewertungsobjekt.")
                     return
             request_backend("POST", path + "/human-review", json=payload)
+            st.session_state.pop(path + "_human_draft", None)
             st.rerun()
+
+
+@st.fragment(run_every="5s")
+def render_active_status(path):
+    try:
+        current = request_backend("GET", path)
+    except BackendError as exc:
+        st.error(str(exc))
+        return
+    st.caption("Aktive Statusabfrage · alle 5 Sekunden · kein erneuter Analyseauftrag")
+    if current["ai_state"] != "RUNNING":
+        st.rerun()
 
 
 def render_comparison(path, record):
     comparison = request_backend("GET", path + "/comparison")
+    combined = comparison.get("combined_result", {})
+    if combined:
+        with st.expander("Gemeinsames Ergebnis aller Prüfungen"):
+            st.write("Status:", combined.get("status"))
+            st.write("Prüfungen:", combined.get("checks", {}))
+            st.write("Widersprüchliche Befunde:", combined.get("conflicting_finding_ids", []))
+            st.write(
+                "Nicht bewertbare Kriterien:", combined.get("not_assessable_criterion_ids", [])
+            )
+            st.write("Quellenstatus:", combined.get("source_status_counts", {}))
+            st.write("Einschränkungen:", combined.get("limitations", []))
+            st.caption(
+                "Die fachliche Gesamtbewertung bleibt beim Menschen. "
+                "Übereinstimmende Verfahren bestätigen keine wissenschaftliche Richtigkeit."
+            )
+        with st.expander("Fundstellenvergleich und Zitierformat"):
+            st.json(comparison.get("retrieval_comparison", {}))
+            st.json(comparison.get("citation_style", {}))
+    coverage = comparison.get("coverage", {})
+    if coverage.get("status") == "INCOMPLETE":
+        st.warning("Analyse unvollständig: Abdeckung und offene menschliche Prüfungen beachten.")
+    if coverage.get("status"):
+        with st.expander("Abdeckung und offene Prüfungen"):
+            st.write("Bearbeitete Pflichtkriterien:", coverage.get("required_reviewed", []))
+            st.write("Bearbeitete optionale Kriterien:", coverage.get("optional_reviewed", []))
+            st.write("Nicht bewertbar:", coverage.get("not_assessable", []))
+            st.write("Offene menschliche Entscheidungen:", coverage.get("open_human_decisions", []))
+            st.write("Lokal nicht überprüfbare Quellen:", coverage.get("unverifiable_sources", []))
+            st.write("Teilanalysen mit Fehlern:", coverage.get("failed_subanalyses", []))
+            st.write("Unverarbeitete Textbereiche:", coverage.get("unprocessed_regions", []))
+            st.caption("Ausgewählter Textkontext belegt keine wissenschaftliche Vollständigkeit.")
     if record.get("cohort"):
         render_academic(path, record)
-    for row in comparison["criteria"]:
-        with st.expander(f"{row['criterion_id']} · {row['status']}"):
-            left, right = st.columns(2)
-            left.write("Menschliche Erstbewertung")
-            left.text(json.dumps(row["human"], ensure_ascii=False, indent=2))
-            right.write("Unabhängige KI-Zweitbewertung")
-            right.text(json.dumps(row["ai"], ensure_ascii=False, indent=2))
-            value = row.get("ai")
-            for finding in [value, *value.get("supplemental", [])] if value else []:
-                if finding.get("conflict"):
-                    st.warning("Ungeklärter Gegenbefund: fachliche Prüfung erforderlich.")
-                if st.button("Textbeleg öffnen", key="evidence_" + finding["finding_id"]):
-                    st.session_state.evidence_finding = finding["finding_id"]
-    if st.session_state.get("evidence_finding"):
-        evidence = request_backend(
-            "GET", path + "/findings/" + st.session_state.evidence_finding + "/evidence"
-        )
-        st.subheader("Evidence Explorer")
-        if evidence["matched"]:
-            st.caption(
-                f"Seite {evidence['page']} · Kapitel {evidence['chapter']} · {evidence['block_id']}"
-            )
-            st.text(evidence["original_text"])
-            st.text("Originalzitat: " + evidence["quote"])
-        else:
-            st.warning("Keine verifizierte Originaltextstelle; Referenz wird nicht angezeigt.")
-        st.caption("Texttreffer beweisen keine fachliche Richtigkeit. Extraktion: Textmodus.")
-    st.caption(
-        "Vergleichsstatus vergleicht Einschätzungen; er beweist keine sachliche Richtigkeit."
-    )
+    review_explorer(path, record, comparison)
     render_finding_feedback(path, comparison, writable=record["state"] != "FINALIZED")
     with st.expander("Analyseherkunft und Ressourcen"):
         if st.button("Geschützte Provenance anzeigen"):
@@ -243,10 +269,10 @@ def render_comparison(path, record):
     for entry in comparison["discussion"]:
         st.text(f"Frage: {entry['question']}\nPrüfung: {entry['answer']}")
     if record["state"] == "FINALIZED":
-        st.text(request_backend("GET", path + "/draft")["text"])
+        render_draft(path)
         return
     ids = [row["criterion_id"] for row in comparison["criteria"]]
-    with st.form("criterion_discussion"):
+    with st.form(path + "_criterion_discussion"):
         criterion = st.selectbox("Kriterium für die Diskussion", ids)
         question = st.text_area("Frage / Gegenargument")
         if st.form_submit_button("Diskutieren"):
@@ -270,7 +296,7 @@ def render_comparison(path, record):
             st.rerun()
 
     if comparison["discussion"]:
-        with st.form("criterion_decision"):
+        with st.form(path + "_criterion_decision"):
             criterion = st.selectbox("Menschliche Entscheidung für", ids)
             include = st.selectbox("KI-Befund übernehmen?", ["Ja", "Nein"], index=None)
             extras = [
@@ -280,7 +306,7 @@ def render_comparison(path, record):
             ]
             selected_extras = st.multiselect(
                 "Zusätzliche Befunde des gewählten Kriteriums übernehmen",
-                [f["finding_id"] for f in extras],
+                [f["finding_id"] for f in extras if f["criterion_id"] == criterion],
                 format_func=lambda key: next(
                     f["criterion_id"] + ": " + f["description"]
                     for f in extras
@@ -306,10 +332,201 @@ def render_comparison(path, record):
                     )
                     st.rerun()
     if record["state"] == "READY_FOR_FINALIZATION":
-        st.text(request_backend("GET", path + "/draft")["text"])
+        render_draft(path)
         if st.button("Gutachtenentwurf abschließend menschlich freigeben"):
             request_backend("POST", path + "/finalize", json={"confirmed": True})
             st.rerun()
+    if comparison.get("reviewer_workspace"):
+        render_reviewer_workspace(path, comparison, writable=record["state"] != "FINALIZED")
+
+
+def render_draft(path):
+    draft = request_backend("GET", path + "/draft")
+    st.subheader("Gutachtenentwurf · Vorschau")
+    st.caption(
+        "Gliederung aus dem aktiven Bewertungskatalog. Nur menschliche "
+        "Entscheidungen und ausdrücklich übernommene Befunde/Anmerkungen. "
+        "Überarbeitungen über die versionierten Kriterienentscheidungen "
+        "speichern."
+    )
+    st.text(draft["text"])
+    left, right = st.columns(2)
+    left.download_button(
+        "Text (TXT) herunterladen",
+        draft["text"],
+        file_name="gutachtenentwurf.txt",
+        mime="text/plain",
+        on_click="ignore",
+    )
+    right.download_button(
+        "Markdown herunterladen",
+        draft["text"],
+        file_name="gutachtenentwurf.md",
+        mime="text/markdown",
+        on_click="ignore",
+    )
+    st.caption(
+        "Lokaler Export in Ihren Downloadordner. Keine Übermittlung an "
+        "externe Systeme. PDF-/DOCX-Export ist nicht angebunden."
+    )
+
+
+def render_reviewer_workspace(path, comparison, *, writable=True):
+    workspace = comparison["reviewer_workspace"]
+    criteria = [r["criterion_id"] for r in comparison["criteria"]]
+    with st.expander("Gutachter-Arbeitsbereich"):
+        st.write("Bearbeitungsstand", workspace["progress"])
+        groups = workspace["finding_groups"]
+        st.write(
+            "Befundvorschläge:",
+            groups["findings_before"],
+            "· Redundanzkandidaten:",
+            groups["redundancy_candidates"],
+        )
+        for group in groups["groups"]:
+            if len(group["finding_ids"]) > 1:
+                st.write("Mögliche Dublette zu " + group["criterion_id"], group["finding_ids"])
+        st.caption(
+            "Unterschiedliche Perspektiven und Gegenbelege bleiben erhalten. "
+            "Vorschläge sind keine nachgewiesenen Fehler; "
+            "eine künstliche Balance wird nicht verlangt."
+        )
+        time_info = workspace["review_time"]
+        st.write(
+            "Erfasste Sitzungsdauer nach Freigabe:",
+            round(time_info["elapsed_seconds"], 1),
+            "Sekunden",
+        )
+        st.caption(
+            "Nur ausdrücklich gestartete Sitzungen; "
+            "keine Messung von Aufmerksamkeit oder Zeitersparnis."
+        )
+        if writable and st.button(
+            "Gutachtersitzung beenden" if time_info["active"] else "Gutachtersitzung starten"
+        ):
+            request_backend(
+                "POST",
+                path + "/reviewer-time",
+                json={"action": "STOP" if time_info["active"] else "START"},
+            )
+            st.rerun()
+        st.write("Reproduzierbarkeit der Dokumentation:", workspace["reproducibility"]["status"])
+        for method in workspace["reproducibility"].get("methods", []):
+            st.write(method["criterion_id"], method["family"])
+            st.write([{"Aspekt": c["label"], "Status": c["status"]} for c in method["checks"]])
+            for check in method["checks"]:
+                for passage in check["passages"]:
+                    st.text(f"Seite {passage['page']}: {passage['context']}")
+        st.caption(
+            "Textfundstellen belegen keine vollständige Reproduzierbarkeit. "
+            "Es werden keine Experimente ausgeführt."
+        )
+        numerical = workspace["numerical"]
+        for row in numerical.get("unparsed_candidates", []):
+            st.text(f"Seite {row['page']}: {row['quote']}")
+            st.caption(
+                "Zahlenschreibweise nicht sicher auswertbar; menschliche Prüfung erforderlich."
+            )
+        for row in numerical.get("arithmetic", []):
+            st.text(f"Seite {row['page']}: {row['quote']} · {row['status']}")
+        for row in numerical.get("comparisons", []):
+            st.write("Zahlenvergleich", row)
+        for item in numerical.get("objects", []):
+            st.text(f"{item['kind']} · Seite {item['page']}")
+            st.text(item["text"][:6000])
+            st.caption("Extrahierter Text; Abbildung oder Tabellenlayout nicht visuell bestätigt.")
+        for question in workspace["questions"]:
+            st.write(question["criterion_id"] + " · " + question["reason"])
+            st.text(question["text"])
+            for passage in question["passages"]:
+                st.text(f"Seite {passage['page']}: {passage['quote']}")
+        for note in workspace["notes"]:
+            st.text(note["criterion_id"] + ": " + note["text"])
+            st.caption(
+                "Für Entwurf freigegeben"
+                if note["include_in_draft"]
+                else "Nur lokale Gutachteranmerkung"
+            )
+        if not writable:
+            return
+        edit_id = st.selectbox(
+            "Vorhandene Anmerkung überarbeiten",
+            [None, *[n["id"] for n in workspace["notes"]]],
+            format_func=lambda key: (
+                "Neue Anmerkung"
+                if key is None
+                else next(n["text"][:80] for n in workspace["notes"] if n["id"] == key)
+            ),
+        )
+        editing = next((n for n in workspace["notes"] if n["id"] == edit_id), None)
+        criterion = st.selectbox(
+            "Anmerkung zu Kriterium", [editing["criterion_id"]] if editing else criteria
+        )
+        with st.form(path + "_reviewer_workspace_note"):
+            questions = [q for q in workspace["questions"] if q["criterion_id"] == criterion]
+            question_id = st.selectbox(
+                "Bezug zu Rückfrage",
+                [None, *[q["id"] for q in questions]],
+                format_func=lambda key: (
+                    "Eigene Anmerkung"
+                    if key is None
+                    else next(q["text"] for q in questions if q["id"] == key)
+                ),
+            )
+            text = st.text_area(
+                "Gutachteranmerkung / Antwort", value=editing["text"] if editing else ""
+            )
+            include = st.checkbox("Diese Anmerkung für den Gutachtenentwurf freigeben", value=False)
+            if st.form_submit_button("Gutachteranmerkung speichern"):
+                if not text.strip():
+                    st.warning("Bitte eine Anmerkung oder Antwort eintragen.")
+                else:
+                    request_backend(
+                        "POST",
+                        path + "/reviewer-notes",
+                        json={
+                            "criterion_id": criterion,
+                            "note_id": edit_id,
+                            "question_id": question_id,
+                            "text": text,
+                            "include_in_draft": include,
+                        },
+                    )
+                    st.rerun()
+        with st.form(path + "_reviewer_applied_method"):
+            criterion = st.selectbox("Methodenprüfung zu Kriterium", criteria)
+            family = st.selectbox(
+                "Tatsächlich angewandte Methode",
+                [
+                    "MACHINE_LEARNING",
+                    "DEEP_LEARNING",
+                    "STATISTICS",
+                    "QUALITATIVE",
+                    "EXPERT_INTERVIEWS",
+                    "LITERATURE_REVIEW",
+                    "SOFTWARE_ENGINEERING",
+                    "DATA_ENGINEERING",
+                    "ECONOMIC_ANALYSIS",
+                ],
+                index=None,
+            )
+            page = st.number_input("Seite des Methodenbelegs", min_value=1, step=1)
+            quote = st.text_area("Exaktes Originalzitat zur angewandten Methode")
+            if st.form_submit_button("Angewandte Methode mit Originalbeleg bestätigen"):
+                if family is None or not quote.strip():
+                    st.warning("Methode auswählen und exaktes Originalzitat angeben.")
+                else:
+                    request_backend(
+                        "POST",
+                        path + "/review-methods",
+                        json={
+                            "criterion_id": criterion,
+                            "family": family,
+                            "evidence": [{"page": int(page), "quote": quote}],
+                            "confirmed_applied": True,
+                        },
+                    )
+                    st.rerun()
 
 
 def render_document_security(path):
@@ -397,7 +614,7 @@ def render_finding_feedback(path, comparison, *, writable):
         if not findings:
             st.info("Keine KI-Befunde für Feedback vorhanden.")
             return
-        with st.form("finding_feedback"):
+        with st.form(path + "_finding_feedback"):
             finding_id = st.selectbox(
                 "Befund",
                 [f["finding_id"] for f in findings],
@@ -414,6 +631,7 @@ def render_finding_feedback(path, comparison, *, writable):
                 "Ergänzen": "SUPPLEMENT",
                 "Nicht relevant": "NOT_RELEVANT",
                 "Nicht ausreichend belegt": "INSUFFICIENT_EVIDENCE",
+                "Manuelle Prüfung erforderlich": "MANUAL_REVIEW_REQUIRED",
             }
             reasons = {
                 "Falsche fachliche Aussage": "WRONG_STATEMENT",
@@ -423,6 +641,7 @@ def render_finding_feedback(path, comparison, *, writable):
                 "Unberechtigte Kritik": "UNJUSTIFIED_CRITICISM",
                 "Unzureichende Evidenz": "INSUFFICIENT_EVIDENCE",
                 "Doppelter Befund": "DUPLICATE",
+                "Fachlicher Fehler bestätigt": "FACTUAL_ERROR",
             }
             action = st.selectbox("Befundaktion", list(actions), index=None)
             reason = st.selectbox("Feedbackgrund", list(reasons), index=None)
@@ -502,7 +721,7 @@ def render_academic(path, record):
         if record["state"] not in {"FINALIZED", "CANCELLED", "FAILED"}:
             choices = [r["finding_id"] for r in [*rows, *references]]
             if choices:
-                with st.form("academic_decision"):
+                with st.form(path + "_academic_decision"):
                     finding = st.selectbox("Lokalen Prüfbefund auswählen", choices)
                     decision = st.selectbox(
                         "Menschliche Bestätigung", ["ACCEPTED", "REJECTED"], index=None

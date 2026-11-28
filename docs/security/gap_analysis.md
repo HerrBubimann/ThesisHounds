@@ -75,7 +75,16 @@ Originalarbeiten wurden geöffnet. Dies ist keine rechtliche Freigabe.
 | Git / Docker / CI | Umfangreiche Ignores, Build-Allowlist, synthetische Tests, Security-Scanner, CI-Gate | Kein eigenständiger verpflichtender Privacy-Job, kein Pfad-DLP/Canary-Gate / P1 |
 | PDF / OCR / Embeddings | Nicht implementiert; keine echte Uploadroute | Parser-Sandbox, Malwareprüfung, OCR-/Embedding-IFC erst vor Freigabe implementieren / Sperre erhalten |
 
-## Priorisierter Implementierungsplan
+## Ursprünglicher Implementierungsplan und heutige Einordnung
+
+Codeabgleich 28.11.2026: Die Schritte 1–5 unten sind inzwischen als grundlegende
+Softwarekontrollen implementiert und mit synthetischen Tests belegt. Sie bleiben
+als historischer Plan erhalten und sind keine neue Liste fehlender Module.
+Zusätzlich vorhanden sind der kontrollierte PUBLIC-PDF-Pilot, die geschützte
+Originalansicht, lokale Snapshot-/Exportwerkzeuge und der neue Reviewarbeitsbereich.
+Offen sind insbesondere echte Identitäten, dauerhafte verschlüsselte Akten,
+vollständige private OS-Parser-/Zielhostabnahme und institutionelle Freigaben.
+Aktuelle Nachweise und Grenzen: [validation.md](../validation.md).
 
 1. P0: vier Schutzklassen mit RESTRICTED-Default, unveränderliche IFC-Metadaten,
    lokaler Sperrvermerkdetektor; zentraler Default-Deny-Entscheidungsweg.

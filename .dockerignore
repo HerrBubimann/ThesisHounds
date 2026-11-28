@@ -12,6 +12,12 @@
 !frontend/egress.py
 !frontend/control_center.py
 !frontend/assessment_review.py
+!frontend/design.py
+!frontend/navigation.py
+!frontend/pages.py
+!frontend/viewmodels.py
+!frontend/evidence.py
+!frontend/sources.py
 !frontend/requirements.lock
 !frontend/Dockerfile
 !frontend/.streamlit/

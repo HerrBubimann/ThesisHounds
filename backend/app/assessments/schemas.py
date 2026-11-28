@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import uuid4
 
-from app.schemas.domain import StrictModel
+from app.schemas.domain import CompactSchemaModel, StrictModel
 from pydantic import Field
 
 Judgment = Literal["POSITIVE", "MIXED", "NEGATIVE", "NOT_ASSESSABLE"]
@@ -38,7 +38,7 @@ class HumanReviewSubmission(StrictModel):
     release: Literal[True]
 
 
-class AIObservation(StrictModel):
+class AIObservation(CompactSchemaModel):
     judgment: Judgment
     kind: Literal[
         "STRENGTH",
@@ -48,6 +48,8 @@ class AIObservation(StrictModel):
         "OPEN_QUESTION",
         "UNVERIFIABLE",
         "SECURITY_INCIDENT",
+        "METHOD_CONCERN",
+        "IMPROVEMENT_SUGGESTION",
     ]
     description: str = Field(min_length=1, max_length=600)
     rationale: str = Field(min_length=1, max_length=600)
@@ -60,6 +62,7 @@ class AIObservation(StrictModel):
     required_context: list[int] = Field(default_factory=list, max_length=100)
     supporting_passages: list["EvidencePassage"] = Field(default_factory=list, max_length=4)
     relationships: list["ScientificRelationship"] = Field(default_factory=list, max_length=4)
+    scientific_claims: list["ScientificClaim"] = Field(default_factory=list, max_length=6)
 
 
 class EvidencePassage(StrictModel):
@@ -67,9 +70,38 @@ class EvidencePassage(StrictModel):
     quote: str = Field(min_length=1, max_length=800)
 
 
+class ScientificClaim(StrictModel):
+    category: Literal[
+        "FACTUAL_ASSERTION",
+        "HYPOTHESIS",
+        "OWN_RESULT",
+        "CONCLUSION",
+        "METHODOLOGICAL_ASSUMPTION",
+        "GENERALIZATION",
+        "LITERATURE_BASED",
+    ]
+    statement: str = Field(min_length=1, max_length=600)
+    passage: EvidencePassage
+    support: list[EvidencePassage] = Field(default_factory=list, max_length=4)
+    counterevidence: list[EvidencePassage] = Field(default_factory=list, max_length=4)
+    citation_ids: list[str] = Field(default_factory=list, max_length=6)
+    concern: Literal[
+        "NONE",
+        "MISSING_EVIDENCE",
+        "POSSIBLE_FACTUAL_ERROR",
+        "MISSING_CONTEXT",
+        "OVERGENERALIZATION",
+    ] = "NONE"
+    rationale: str = Field(min_length=1, max_length=600)
+
+
 class ScientificRelationship(StrictModel):
     source: Literal[
         "QUESTION",
+        "HYPOTHESIS",
+        "SOURCE",
+        "DATASET",
+        "EXPERIMENT",
         "OBJECTIVE",
         "THEORY",
         "PRIOR_WORK",
@@ -83,6 +115,10 @@ class ScientificRelationship(StrictModel):
     ]
     target: Literal[
         "QUESTION",
+        "HYPOTHESIS",
+        "SOURCE",
+        "DATASET",
+        "EXPERIMENT",
         "OBJECTIVE",
         "THEORY",
         "PRIOR_WORK",
@@ -162,12 +198,20 @@ class AssessmentFinding(AIObservation):
     escalation: dict = Field(default_factory=dict)
     performance: dict = Field(default_factory=dict)
     provenance: dict = Field(default_factory=dict)
+    claim_checks: list[dict] = Field(default_factory=list)
+    debate_summary: dict = Field(default_factory=dict)
 
 
 class FindingFeedback(StrictModel):
     finding_id: str = Field(min_length=1, max_length=100)
     action: Literal[
-        "ACCEPT", "REJECT", "CORRECT", "SUPPLEMENT", "NOT_RELEVANT", "INSUFFICIENT_EVIDENCE"
+        "ACCEPT",
+        "REJECT",
+        "CORRECT",
+        "SUPPLEMENT",
+        "NOT_RELEVANT",
+        "INSUFFICIENT_EVIDENCE",
+        "MANUAL_REVIEW_REQUIRED",
     ]
     reason: (
         Literal[
@@ -178,6 +222,7 @@ class FindingFeedback(StrictModel):
             "UNJUSTIFIED_CRITICISM",
             "INSUFFICIENT_EVIDENCE",
             "DUPLICATE",
+            "FACTUAL_ERROR",
         ]
         | None
     ) = None
@@ -211,3 +256,33 @@ class DocumentSecurityDecision(StrictModel):
     allow_public_processing: bool
     rationale: str = Field(min_length=1, max_length=1000)
     confirmed: Literal[True]
+
+
+class ReviewerNote(StrictModel):
+    note_id: str | None = Field(default=None, max_length=100)
+    criterion_id: str = Field(min_length=1, max_length=40)
+    finding_id: str | None = Field(default=None, max_length=100)
+    question_id: str | None = Field(default=None, max_length=100)
+    text: str = Field(min_length=1, max_length=2000)
+    include_in_draft: bool = False
+
+
+class MethodConfirmation(StrictModel):
+    criterion_id: str = Field(min_length=1, max_length=40)
+    family: Literal[
+        "MACHINE_LEARNING",
+        "DEEP_LEARNING",
+        "STATISTICS",
+        "QUALITATIVE",
+        "EXPERT_INTERVIEWS",
+        "LITERATURE_REVIEW",
+        "SOFTWARE_ENGINEERING",
+        "DATA_ENGINEERING",
+        "ECONOMIC_ANALYSIS",
+    ]
+    evidence: list[EvidencePassage] = Field(min_length=1, max_length=3)
+    confirmed_applied: Literal[True]
+
+
+class ReviewerTimeAction(StrictModel):
+    action: Literal["START", "STOP"]

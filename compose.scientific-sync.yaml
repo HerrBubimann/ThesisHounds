@@ -1,0 +1,31 @@
+name: thesishounds-public-scientific-sync
+services:
+  public-sync:
+    image: thesishounds/backend:0.2.0
+    pull_policy: never
+    entrypoint: [python, /opt/public-tools/sync_scientific.py]
+    command: [--help]
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    cpus: 1
+    mem_limit: 256m
+    restart: "no"
+    logging:
+      driver: none
+    environment:
+      OTEL_SDK_DISABLED: "true"
+      LANGSMITH_TRACING: "false"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - ./infrastructure/scripts/sync_scientific.py:/opt/public-tools/sync_scientific.py:ro
+      - public_metadata_staging:/public-staging
+    networks: [public_scientific_sync]
+    tmpfs: [/tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001,mode=1770]
+networks:
+  public_scientific_sync:
+    internal: false
+volumes:
+  public_metadata_staging:

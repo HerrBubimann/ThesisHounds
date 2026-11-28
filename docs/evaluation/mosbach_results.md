@@ -1,5 +1,9 @@
 # Mosbach-/Quellen-Ergebnisse und Sicherheitsgrenzen
 
+> Historischer Nachweis dieser Iteration. Testzahlen, Werkzeugverfügbarkeit und
+> offene Infrastrukturprüfungen beziehen sich auf den unten genannten Prüfzeitpunkt.
+> Aktueller konsolidierter Stand: [Validierung](../validation.md).
+
 **Historischer Basisstand vor dem erneuten Security-Hardening.** Aktuelle Gesamtzahlen,
 Gitleaks-/Trivy-Nachweise und weitere Korrekturen stehen im
 [Hardening-Bericht](../security/hardening_results.md). Die folgenden 522 Tests und

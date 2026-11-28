@@ -20,6 +20,7 @@ VARIANTS = {
     "ci-mock": ["compose.yaml", "compose.ci.yaml"],
     "university": ["compose.university.yaml"],
     "grobid": ["compose.yaml", "compose.grobid.yaml"],
+    "scientific-sync": ["compose.scientific-sync.yaml"],
 }
 EXPECTED_SERVICES = {"frontend", "backend", "ollama"}
 REQUIRED_FILES = [
@@ -79,7 +80,53 @@ def render(files: list[str]) -> dict:
     return json.loads(result.stdout)
 
 
+def check_public_sync(config):
+    services, networks = config.get("services", {}), config.get("networks", {})
+    service = services.get("public-sync", {})
+    errors = []
+    if set(services) != {"public-sync"} or set(networks) != {"public_scientific_sync"}:
+        errors.append("public-sync: separate service and network required")
+    if set(service.get("networks", {})) != {"public_scientific_sync"}:
+        errors.append("public-sync: private runtime networks denied")
+    if any(n.get("external") or n.get("internal") for n in networks.values()):
+        errors.append("public-sync: separate outbound network required")
+    if not service.get("read_only") or service.get("user") != "10001:10001":
+        errors.append("public-sync: non-root read-only runtime required")
+    if "ALL" not in service.get("cap_drop", []) or not any(
+        s.startswith("no-new-privileges") for s in service.get("security_opt", [])
+    ):
+        errors.append("public-sync: restricted capabilities required")
+    if service.get("ports") or service.get("privileged") or service.get("pull_policy") != "never":
+        errors.append("public-sync: inbound ports, privilege and automatic downloads denied")
+    mounts = service.get("volumes", [])
+    if len(mounts) != 2 or any(
+        m.get("target") not in {"/opt/public-tools/sync_scientific.py", "/public-staging"}
+        or (m.get("target") == "/public-staging" and m.get("type") != "volume")
+        or (
+            m.get("target") == "/opt/public-tools/sync_scientific.py"
+            and (
+                not m.get("read_only")
+                or Path(m.get("source", "")).resolve()
+                != (ROOT / "infrastructure/scripts/sync_scientific.py").resolve()
+            )
+        )
+        for m in mounts
+    ):
+        errors.append("public-sync: only read-only downloader and public staging volume allowed")
+    if set(service.get("environment", {})) - {
+        "OTEL_SDK_DISABLED",
+        "LANGSMITH_TRACING",
+        "DO_NOT_TRACK",
+    }:
+        errors.append("public-sync: runtime secrets/configuration denied")
+    if not service.get("mem_limit") or not service.get("pids_limit") or not service.get("cpus"):
+        errors.append("public-sync: bounded resources required")
+    return errors
+
+
 def check_variant(name: str, config: dict) -> list[str]:
+    if name == "scientific-sync":
+        return check_public_sync(config)
     errors: list[str] = []
     services = config.get("services", {})
     networks = config.get("networks", {})

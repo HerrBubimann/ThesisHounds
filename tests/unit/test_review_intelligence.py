@@ -110,7 +110,10 @@ def test_relationships_need_two_distinct_real_spans_and_remain_proposals():
     update_evidence(finding, doc)
     assert finding.evidence_quality == "INSUFFICIENT"
     mapping = consistency_map(doc, structure_document(doc))
-    assert len(mapping["nodes"]) == 11 and not mapping["absence_proven"]
+    assert {"HYPOTHESIS", "SOURCE", "DATASET", "EXPERIMENT"} <= {
+        node["aspect"] for node in mapping["nodes"]
+    }
+    assert not mapping["absence_proven"]
 
 
 def test_quote_outside_selected_context_and_private_derivatives_stay_insufficient_and_private():

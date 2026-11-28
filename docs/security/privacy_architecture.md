@@ -8,9 +8,10 @@ Ergänzung 27.11.2026: Die [Mosbach-Wissensbasis](../dhbw/assessment_profiles.md
 und [lokale Quellenprüfung](../research/research_privacy.md) erweitern ausschließlich
 die öffentliche/synthetische Entwicklungsbasis. Neue Parser-/Importpfade sind kein
 Realdokumenteingang. Interne Kataloge und private GROBID-Aufrufe bleiben gesperrt.
-Keine neue Netzwerkroute zu Rechercheprovidern wurde geöffnet.
+Keine private Runtime-Netzwerkroute zu Rechercheprovidern wurde geöffnet. Der separate
+öffentliche Sync ist ausschließlich für feste unabhängig geprüfte Metadatensätze vorgesehen.
 
-Stand: 2026-11-26. Einstieg: [Gap Analysis und Plan](gap_analysis.md),
+Implementierungsabgleich: 28.11.2026. Einstieg: [Gap Analysis und Plan](gap_analysis.md),
 [Produktionssperren](production_readiness.md), [Testnachweise](privacy_test_results.md).
 
 ## Verbindliche Grenze
@@ -25,10 +26,13 @@ zusätzlich jede öffentliche externe Modellverarbeitung deaktiviert.
 
 - `Settings.security_mode`: nur DEVELOPMENT startet. UNIVERSITY_SECURE,
   PUBLIC_RESEARCH und EXPERIMENTAL_PUBLIC werden serverseitig abgelehnt.
-- Die App verwendet einen deterministischen `DemoProvider` ohne Netzwerk-/Datei-I/O.
-  Dieser simuliert Abläufe, keine fachliche Modellleistung. Kein Modellfallback.
-- Nur das serverseitige synthetische Dokument ist adressierbar; keine Uploadroute,
-  kein privater PDF-/OCR-/persistenter Vektordatenbankpfad. Freier `/chat` ist gesperrt;
+- Standard ist der deterministische `DemoProvider` ohne Netzwerk-/Datei-I/O.
+  Er simuliert Abläufe, keine fachliche Modellleistung. Der getrennt konfigurierte
+  `local_pilot` benötigt reale Artefakt-/Katalogfreigaben und registrierte PUBLIC-Daten;
+  er hat keinen Mock-/Cloudfallback.
+- Adressierbar sind die synthetische Fixture oder registrierte, erneut geprüfte
+  öffentliche Pilot-PDFs. Keine freie/private Uploadroute, kein privater PDF-/OCR-
+  oder persistenter Vektordatenbankpfad. Freier `/chat` ist gesperrt;
   ausschließlich das feste Signal `Test` ist zugelassen.
 - Lokale Textchunks und Feature-Hash-Vektoren bleiben im analyse-/dokumentbezogenen
   Reviewkontext. Kein externer Embedder oder globaler Index. Feedback/Provenance
@@ -54,7 +58,8 @@ zusätzlich jede öffentliche externe Modellverarbeitung deaktiviert.
   erhält den anschließenden Begutachtungsablauf.
 - Inferenz-/Create-/Delete-Audit enthält nur erlaubte technische Metadaten.
   Allgemeine HTTP-/Tracinglogs sind unterdrückt, Fehler generisch, API-Antworten no-store.
-- Speicherung außerhalb des Source-Repositorys, exklusive UUID-Dateien, TTL,
+- Speicherung außerhalb des Source-Repositorys; synthetische Run-Dateien sind UUID-,
+  registrierte Pilotdateien SHA-256-gebunden. TTL,
   Shutdown-Cleanup, Orphan-Sweep und explizite Delete-Endpunkte.
 - Vor jedem CI-Artefaktupload werden Reports auf die synthetischen Canary-Marker
   einschließlich Base64/Hex und Chunkgrenzen geprüft. Bei Treffer oder fehlender

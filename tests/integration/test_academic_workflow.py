@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 from frontend.api_client import BackendError
 from tests.fixtures import CONFIG
 from tests.fixtures.assessments import AssessmentProvider, human_submission
+from tests.fixtures.frontend import create_case_ui
 
 
 def test_local_check_ui_has_explicit_decisions_and_verified_citation_navigation():
@@ -207,18 +208,16 @@ def test_streamlit_selection_and_candidate_rules_display(tmp_path):
                 raise BackendError("Synthetic API rejection")
             return response.json()
 
-        with patch("frontend.assessment_review.request_backend", side_effect=backend):
+        with (
+            patch("frontend.assessment_review.request_backend", side_effect=backend),
+            patch("frontend.api_client.request_backend", side_effect=backend),
+        ):
             app = AppTest.from_string(
                 "from frontend.assessment_review import render_assessment_review\n"
                 "render_assessment_review()",
                 default_timeout=10,
             ).run()
-            next(
-                b for b in app.selectbox if b.label == "Jahrgang für die Richtlinienvorschau"
-            ).select("DS25").run()
-            next(
-                b for b in app.button if b.label == "Synthetische Begutachtung anlegen"
-            ).click().run()
+            create_case_ui(app, cohort="DS25")
             assert not app.exception
             assert any("Regelkonflikt page_count_basis" in w.value for w in app.warning)
             assert any("keine aktivierten offiziellen" in w.value for w in app.warning)

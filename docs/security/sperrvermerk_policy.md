@@ -1,6 +1,8 @@
 # Sperrvermerk policy
 
-Alle echten Arbeiten bleiben standardmäßig RESTRICTED und derzeit unzulässig.
+Vertrauliche und unbekannte Arbeiten bleiben standardmäßig RESTRICTED und derzeit
+unzulässig. Unabhängig geprüfte öffentliche Testdateien benötigen eine separate
+Registrierung; bloße Clientbehauptungen oder entfernte Namen genügen nicht.
 `detect_sperrvermerk` durchsucht lokal sämtliche gelieferten Seiten sowie Metadaten
 und vorhandenen OCR-Text. Die Seitenposition ist unerheblich: Titelseite, spätere
 Seiten und extrahierte Kopf-/Fußzeilen werden gleichermaßen erfasst. Normalisierung
@@ -30,5 +32,7 @@ Es gibt keinen freigegebenen privaten PDF-Eingang oder OCR-Dienst. Der Detektor 
 der bereits lokal bereitsteht; Bilder, fehlerhafte Extraktion und unbekannte
 Formulierungen können Treffer verhindern. Parser-Sandbox, Malwareprüfung,
 Metadatenextraktion und OCR-Abnahme bleiben vor echtem Upload erforderlich.
-Der UI-Status bezieht sich derzeit ausschließlich auf die synthetische Fixture.
+Der UI-Status bezieht sich auf das jeweils zugelassene synthetische beziehungsweise
+registrierte öffentliche Pilotdokument. Ein Sperrvermerk verhindert dessen Registrierung
+als unbedenkliche PUBLIC-Pilotdatei.
 Öffentliche Bibliotheksimporte und der optionale GROBID-Adapter ersetzen diese Freigabe nicht.

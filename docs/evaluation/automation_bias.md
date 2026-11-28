@@ -23,3 +23,8 @@ Implemented interaction controls: server embargo, no early numerical AI rating,
 neutral side-by-side review, uncertainty/evidence labels, no preselected agreement,
 explicit criterion decisions and final human release. No participant results,
 causal benefits or bias-elimination claims exist yet.
+
+The three conditions above are a proposed study protocol, not selectable production
+modes. The current UI does not provide an early-disclosure or privacy-bypass switch;
+RESTRICTED model discussion remains blocked. A participant study requires separate
+authorization and reference judgments before any benefit can be measured.

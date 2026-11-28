@@ -8,6 +8,8 @@ No retrieval score or missing hit establishes academic truth or content absence.
 import hashlib
 import math
 import re
+import sqlite3
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -122,6 +124,28 @@ class LocalContextIndex:
         if len(chunks) > 4096:
             raise LLMError(413, "CONTEXT_INDEX_TOO_LARGE")
         self.chunks = tuple(chunks)
+        self._by_id = {c.id: c for c in self.chunks}
+        self._fts = None
+        self._fts_lock = threading.RLock()
+        self._closed = False
+        self.fts_build_count = 0
+
+    def close(self):
+        with self._fts_lock:
+            if self._fts is not None:
+                self._fts.close()
+                self._fts = None
+            self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def __del__(self):
+        if hasattr(self, "_fts_lock"):
+            self.close()
 
     def _append(self, chunks, block, start, end):
         if len(chunks) >= 4096:
@@ -142,6 +166,58 @@ class LocalContextIndex:
                 reliable=block.reliable,
             )
         )
+
+    def search_fulltext(self, query, *, analysis_id, document_id, limit=20):
+        """Reuse one bounded RAM-only FTS index for this document and analysis."""
+        if (analysis_id, document_id) != (self.analysis_id, self.document_id):
+            raise LLMError(403, "CONTEXT_SCOPE_DENIED")
+        if not 1 <= limit <= 100:
+            raise ValueError("CONTEXT_RESULT_LIMIT")
+        tokens = re.findall(r"\w+", query)[:20]
+        if not tokens:
+            return []
+        with self._fts_lock:
+            if self._closed:
+                raise LLMError(410, "CONTEXT_INDEX_CLOSED")
+            if self._fts is None:
+                db = sqlite3.connect(":memory:", check_same_thread=False)
+                try:
+                    db.execute("CREATE VIRTUAL TABLE chunks USING fts5(chunk_id UNINDEXED, text)")
+                    db.executemany(
+                        "INSERT INTO chunks VALUES (?, ?)", [(c.id, c.text) for c in self.chunks]
+                    )
+                except sqlite3.Error:
+                    db.close()
+                    raise
+                self._fts = db
+                self.fts_build_count += 1
+            expression = " OR ".join('"' + token + '"' for token in tokens)
+            rows = self._fts.execute(
+                "SELECT chunk_id, rank FROM chunks WHERE chunks MATCH ? "
+                "ORDER BY rank, chunk_id LIMIT ?",
+                (expression, limit),
+            ).fetchall()
+        return [(self._by_id[key], -score, "SQLITE_FTS5_BM25") for key, score in rows]
+
+    def fuse_rankings(self, rankings, *, limit=20):
+        """Reciprocal Rank Fusion joins evidence locations, never scientific judgments."""
+        if not 1 <= limit <= 100:
+            raise ValueError("CONTEXT_RESULT_LIMIT")
+        scores = Counter()
+        for ranking in rankings:
+            seen = set()
+            for rank, (chunk, _, _) in enumerate(ranking, 1):
+                if self._by_id.get(chunk.id) is not chunk:
+                    raise LLMError(403, "CONTEXT_FUSION_SCOPE_DENIED")
+                if chunk.id in seen:
+                    raise ValueError("DUPLICATE_RETRIEVAL_RESULT")
+                seen.add(chunk.id)
+                scores[chunk.id] += 1 / (60 + rank)
+        ordered = sorted(
+            scores,
+            key=lambda key: (-scores[key], self._by_id[key].page, self._by_id[key].start, key),
+        )[:limit]
+        return [(self._by_id[key], scores[key], "RECIPROCAL_RANK_FUSION") for key in ordered]
 
     def search(
         self, query, *, analysis_id, document_id, category, allowed_pages=None, expanded=False

@@ -40,7 +40,7 @@ def snapshot(record, config):
         if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", sha)
         else "UNKNOWN",
         "working_tree_state": "UNKNOWN",
-        "workflow_version": "adaptive-review.v2",
+        "workflow_version": "scientific-review.v4",
         "architecture": record.architecture,
         "agent_configuration": config.agents.model_dump(),
         "execution_limits": config.limits.model_dump(),

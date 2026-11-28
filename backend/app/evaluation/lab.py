@@ -33,6 +33,7 @@ from app.evaluation.metrics import (
     fingerprint,
     planning_metrics,
     quality_metrics,
+    review_tool_metrics,
     variation_comparisons,
 )
 from app.llm.errors import LLMError
@@ -264,6 +265,9 @@ async def run_experiment(
                         findings=[f.model_dump() for f in findings],
                         prediction_fingerprints=[fingerprint(f) for f in flat],
                         quality=quality,
+                        reviewer_tools=review_tool_metrics(
+                            document, catalog, findings, scoped_reference if compatible else None
+                        ),
                         coverage_complete=coverage.complete,
                         not_assessable=len(coverage.not_assessable),
                         evidence_match_rate=sum(f.evidence_status == "QUOTE_MATCHED" for f in flat)
@@ -298,6 +302,7 @@ async def run_experiment(
         else "SYNTHETIC_EVALUATION",
         "data_classification": "PUBLIC",
         "version": "evaluation-lab.v1",
+        "finding_fingerprint_version": "scientific-evidence.v2",
         "run_at": now().isoformat(),
         "mocked": not isinstance(gateway.providers["ollama"], OllamaProvider),
         "hardware": {
@@ -369,6 +374,11 @@ def export_results(report: dict, directory: Path) -> tuple[Path, Path]:
         "false_negatives",
         "hallucination_rate",
         "source_correctness",
+        "scientific_claim_correctness",
+        "methodological_weakness_correctness",
+        "error_propagation_rate",
+        "reviewer_acceptance",
+        "human_time_saved_seconds",
         "reference_status",
         "inference_gpu_peak_bytes",
         "point_deviation",

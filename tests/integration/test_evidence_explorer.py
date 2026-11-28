@@ -58,47 +58,30 @@ def test_evidence_is_scoped_embargoed_and_selectively_human_approved(tmp_path):
         assert client.get(route).json()["finding"]["human_approval"] == "ACCEPTED"
 
 
-def test_streamlit_navigates_from_finding_to_a_verified_original_span():
-    finding_id = str(uuid4())
-    finding = {
-        "finding_id": finding_id,
-        "criterion_id": "methodology",
-        "description": "Synthetic finding",
-        "human_approval": "PENDING",
-        "supplemental": [],
-    }
-    calls = []
+def test_streamlit_navigates_from_finding_to_a_verified_original_span(tmp_path):
+    from tests.integration.test_finding_feedback import assessment
 
-    def backend(method, path, **kwargs):
-        calls.append(path)
-        if path.endswith("/comparison"):
-            return {
-                "criteria": [
-                    {
-                        "criterion_id": "methodology",
-                        "status": "AGREEMENT",
-                        "human": {},
-                        "ai": finding,
-                    }
-                ],
-                "discussion": [],
-            }
-        assert path.endswith(f"/findings/{finding_id}/evidence")
-        return {
-            "matched": True,
-            "page": 2,
-            "chapter": "Methodik",
-            "block_id": "p2-b0",
-            "original_text": "Original synthetic text",
-            "quote": "synthetic",
-        }
+    with assessment(tmp_path) as (_, client, path, _, _):
+        finding = client.get(path + "/comparison").json()["criteria"][0]["ai"]
+        expected = client.get(path + "/findings/" + finding["finding_id"] + "/evidence").json()
+        calls = []
 
-    with patch("frontend.assessment_review.request_backend", side_effect=backend):
-        app = AppTest.from_string(
-            "from frontend.assessment_review import render_comparison\n"
-            "render_comparison('/api/v1/assessments/synthetic', {'state':'READY_FOR_COMPARISON'})"
-        ).run()
-        next(b for b in app.button if b.label == "Textbeleg öffnen").click().run()
-        assert not app.exception
-        assert any(t.value == "Original synthetic text" for t in app.text)
-        assert any(f"/findings/{finding_id}/evidence" in p for p in calls)
+        def backend(method, target, **kwargs):
+            calls.append(target)
+            response = client.request(method, target, **kwargs)
+            response.raise_for_status()
+            return response.json()
+
+        with (
+            patch("frontend.assessment_review.request_backend", side_effect=backend),
+            patch("frontend.api_client.request_backend", side_effect=backend),
+        ):
+            ui = AppTest.from_string(
+                "from frontend.assessment_review import render_comparison, request_backend\n"
+                f"render_comparison({path!r}, request_backend('GET', {path!r}))"
+            ).run()
+            assert not ui.exception
+            next(b for b in ui.button if b.key == "evidence_" + finding["finding_id"]).click().run()
+            assert not ui.exception
+            assert any(t.value == expected["original_text"] for t in ui.text)
+            assert any(f"/findings/{finding['finding_id']}/evidence" in p for p in calls)

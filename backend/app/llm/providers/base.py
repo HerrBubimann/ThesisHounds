@@ -1,6 +1,6 @@
 from typing import Any, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from app.llm.model_registry import ModelDefinition
 from app.models.schemas import LocalModel
@@ -10,9 +10,13 @@ from app.security.classification import Classification
 class Completion(BaseModel):
     text: str
     model: str
-    input_tokens: int | None = Field(default=None, ge=0)
-    output_tokens: int | None = Field(default=None, ge=0)
+    input_tokens: StrictInt | None = Field(default=None, ge=0)
+    output_tokens: StrictInt | None = Field(default=None, ge=0)
     load_duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    total_duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    generation_duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    prompt_duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    first_content_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     data_classification: Classification = Classification.RESTRICTED
 
 

@@ -15,3 +15,12 @@ Consequences: CI demonstrates orchestration and safety with mocks, not scientifi
 quality. Missing/incomplete adjudication yields null quality metrics. Real model,
 hardware and human-subject studies remain separate prerequisites. No administrator
 or university management feature is introduced.
+
+## Implementation follow-up, 2026-11-28
+
+The CLI lab additionally accepts registered, independently reviewed public test PDFs
+through the controlled pilot catalog, and records their exact input hashes. Mock and
+real-provider conditions remain distinct; a successful real-model study is not supplied.
+Model probes v3 add bounded parallel dispatch and optional stream-fragment timing;
+these do not manufacture quality labels or exact TTFT.
+[Current evaluation](../evaluation.md).

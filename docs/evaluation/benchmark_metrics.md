@@ -17,5 +17,8 @@
 
 Undefined ratios (zero denominator) are null, never zero. Report sample counts,
 model/revision/configuration, paired confidence intervals and case clustering.
-The initial probe implements schema/timing/token plumbing only; most quality metrics
-require human reference work and are not reported as measured results.
+The current probe v3 implements schema/timing/token plumbing, bounded dispatch and
+optional first-content-fragment timing. Exact TTFT and per-model peaks remain unknown.
+The lab/reference interfaces can calculate quality metrics only from complete matching
+human adjudications. Reviewer session elapsed time is not attention or measured time saved.
+No such missing scientific measurement is reported as a real model result.
